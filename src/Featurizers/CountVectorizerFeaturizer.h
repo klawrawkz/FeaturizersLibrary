@@ -18,10 +18,10 @@ namespace Featurizers {
 ///                 consist of <dictid, # of appearances>
 ///
 struct TFStruct {
-    std::uint32_t const dictionaryId;                              // dict id
-    std::uint32_t const appearances;                               // number of appearances
+    std::uint32_t const DictionaryId;                              // dict id
+    std::uint32_t const NumOfAppearances;                          // number of appearances
 
-    TFStruct(std::uint32_t d, std::uint32_t a);
+    TFStruct(std::uint32_t dictionaryId, std::uint32_t numOfAppearances);
     //FEATURIZER_MOVE_CONSTRUCTOR_ONLY(TFStruct);
     bool operator==(TFStruct const &other) const;
 };
@@ -40,6 +40,7 @@ public:
     using BaseType                           = StandardTransformer<std::string, TFStruct>;
     using IndexMap                           = std::unordered_map<std::string, std::uint32_t>;
     using IterRangeType                      = std::tuple<std::string::const_iterator, std::string::const_iterator>;
+    using MapWithIterRange                   = std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>;
 
     // ----------------------------------------------------------------------
     // |
@@ -47,6 +48,7 @@ public:
     // |
     // ----------------------------------------------------------------------
     IndexMap const                           Labels;
+    //Binary: If True, all non zero counts are set to 1. This is useful for discrete probabilistic models that model binary events rather than integer counts.
     bool const                               Binary;
 
     // ----------------------------------------------------------------------
@@ -72,34 +74,30 @@ private:
 
     // MSVC has problems when the definition and declaration are separated
     void execute_impl(typename BaseType::InputType const &input, typename BaseType::CallbackFunction const &callback) override {
-
-        typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp> ApperanceMap;
+        //termfrequency for specific document
+        MapWithIterRange documentTermFrequency;
 
         //todo: will use vector<functor> after string header file is done
         Components::split_temp( 
             input, 
-            [&ApperanceMap] (std::string::const_iterator & iter_start, std::string::const_iterator & iter_end) {
-                
-                typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>::iterator iter_apperance(ApperanceMap.find(std::make_tuple(iter_start, iter_end)));
-                
-                if (iter_apperance != ApperanceMap.end()) {
-                    ++iter_apperance->second;
+            [&documentTermFrequency] (std::string::const_iterator & iterStart, std::string::const_iterator & iterEnd) {
+                MapWithIterRange::iterator docuTermFreqIter(documentTermFrequency.find(std::make_tuple(iterStart, iterEnd)));
+                if (docuTermFreqIter != documentTermFrequency.end()) {
+                    ++docuTermFreqIter->second;
                 } else {
-                    ApperanceMap.insert(std::make_pair(std::make_tuple(iter_start, iter_end), 1));
+                    documentTermFrequency.insert(std::make_pair(std::make_tuple(iterStart, iterEnd), 1));
                 }
             }
         );
 
-        for (auto const & pair : ApperanceMap) {
-            std::string const word = std::string(std::get<0>(pair.first), std::get<1>(pair.first));
-
-            typename IndexMap::const_iterator const      iter_label(Labels.find(word));
-
-            if (iter_label != Labels.end()) {
+        for (auto const & pair : documentTermFrequency) {
+            std::string const word(std::string(std::get<0>(pair.first), std::get<1>(pair.first)));
+            IndexMap::const_iterator const      labelIter(Labels.find(word));
+            if (labelIter != Labels.end()) {
                 if (Binary) {
-                    callback(TFStruct(static_cast<std::uint32_t>(iter_label->second), static_cast<std::uint32_t>(1)));
+                    callback(TFStruct(labelIter->second, 1));
                 } else {
-                    callback(TFStruct(static_cast<std::uint32_t>(iter_label->second), static_cast<std::uint32_t>(pair.second)));
+                    callback(TFStruct(labelIter->second, pair.second));
                 }
             }
         }
@@ -179,7 +177,7 @@ private:
         for (auto const & termFrequencyAndIndexPair : termFrequencyAndIndex)
             termIndex.insert(std::make_pair(termFrequencyAndIndexPair.first, termFrequencyAndIndexPair.second.Index));
 
-        return std::make_unique<CountVectorizerTransformer>(termIndex, _binary);
+        return std::make_unique<CountVectorizerTransformer>(std::move(termIndex), std::move(_binary));
     }
 };
 
@@ -244,12 +242,12 @@ public:
 // |  TFStruct
 // |
 // ----------------------------------------------------------------------
-bool TFStruct::operator==(TFStruct const &other) const {
-    return (appearances == other.appearances) && (dictionaryId == other.dictionaryId);
+TFStruct::TFStruct(std::uint32_t dictionaryId, std::uint32_t numOfAppearances) :
+    DictionaryId(std::move(dictionaryId)),
+    NumOfAppearances(std::move(numOfAppearances)) {
 }
-TFStruct::TFStruct(std::uint32_t d, std::uint32_t a) :
-    dictionaryId(std::move(d)),
-    appearances(std::move(a)) {
+bool TFStruct::operator==(TFStruct const &other) const {
+    return (DictionaryId == other.DictionaryId) && (NumOfAppearances == other.NumOfAppearances);
 }
 
 // ----------------------------------------------------------------------
@@ -358,6 +356,6 @@ template <size_t MaxNumTrainingItemsV>
 void Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>::complete_training_impl(void) /*override*/ {
 }
 
-}
-}
-}
+} // namespace Featurizers
+} // namespace Featurizer
+} // namespace Microsoft

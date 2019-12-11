@@ -20,10 +20,10 @@ namespace Featurizers {
 ///                 consist of <dictid, tfidf value>
 ///
 struct TFIDFStruct {
-    std::uint32_t const dictionaryId;                              // dict id
-    std::float_t const tfidf;                                      // freq
+    std::uint32_t const DictionaryId;                              // dict id
+    std::float_t const TfidfValue;                                 // tfidf value
 
-    TFIDFStruct(std::uint32_t d, std::float_t t);
+    TFIDFStruct(std::uint32_t dictionaryId, std::float_t tfidfValue);
     //FEATURIZER_MOVE_CONSTRUCTOR_ONLY(TFIDFStruct);
     bool operator==(TFIDFStruct const &other) const;
 };
@@ -41,7 +41,9 @@ public:
     // ----------------------------------------------------------------------
     using BaseType                           = StandardTransformer<std::string, TFIDFStruct>;
     using IndexMap                           = std::unordered_map<std::string, std::uint32_t>;
+    using FrequencyMap                       = IndexMap;
     using IterRangeType                      = std::tuple<std::string::const_iterator, std::string::const_iterator>;
+    using MapWithIterRange                   = std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>;
 
     // ----------------------------------------------------------------------
     // |
@@ -49,9 +51,9 @@ public:
     // |
     // ----------------------------------------------------------------------
     IndexMap const                           Labels;
-    IndexMap const                           DocumentFreq;
+    FrequencyMap const                       DocumentFreq;
     std::uint32_t const                      TotalNumsDocuments;
-
+    //Binary: If True, all non zero counts are set to 1. This is useful for discrete probabilistic models that model binary events rather than integer counts.
     bool const                               Binary;
     std::string const                        Norm;
     bool const                               UseIdf;
@@ -65,7 +67,7 @@ public:
     // ----------------------------------------------------------------------
     TfidfVectorizerTransformer(
         IndexMap labels, 
-        IndexMap docufreq, 
+        FrequencyMap docufreq, 
         std::uint32_t totalnumdocus, 
         bool binary, 
         std::string norm, 
@@ -90,32 +92,30 @@ private:
 
     // MSVC has problems when the definition and declaration are separated
     void execute_impl(typename BaseType::InputType const &input, typename BaseType::CallbackFunction const &callback) override {
-
-        typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp> TermFreqMap;
+        //termfrequency for specific document
+        MapWithIterRange documentTermFrequency;
 
         //todo: will use vector<functor> after string header file is done
         Components::split_temp( 
             input, 
-            [&TermFreqMap] (std::string::const_iterator & iter_start, std::string::const_iterator & iter_end) {
-                
-                typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>::iterator iter_tf(TermFreqMap.find(std::make_tuple(iter_start, iter_end)));
-                
-                if (iter_tf != TermFreqMap.end()) {
-                    ++iter_tf->second;
+            [&documentTermFrequency] (std::string::const_iterator & iterStart, std::string::const_iterator & iterEnd) {
+                MapWithIterRange::iterator docuTermFreqIter(documentTermFrequency.find(std::make_tuple(iterStart, iterEnd)));
+                if (docuTermFreqIter != documentTermFrequency.end()) {
+                    ++docuTermFreqIter->second;
                 } else {
-                    TermFreqMap.insert(std::make_pair(std::make_tuple(iter_start, iter_end), 1));
+                    documentTermFrequency.insert(std::make_pair(std::make_tuple(iterStart, iterEnd), 1));
                 }
             }
         );
 
         std::float_t normVal = 0.0f;
         std::vector<std::tuple<std::uint32_t, std::float_t>> results;
-        for (auto const & pair : TermFreqMap) {
-            std::string const word = std::string(std::get<0>(pair.first), std::get<1>(pair.first));
+        for (auto const & pair : documentTermFrequency) {
+            std::string const word(std::string(std::get<0>(pair.first), std::get<1>(pair.first)));
 
-            typename IndexMap::const_iterator const      iter_label(Labels.find(word));
+            IndexMap::const_iterator const      labelIter(Labels.find(word));
 
-            if (iter_label != Labels.end()) {
+            if (labelIter != Labels.end()) {
                 
                 std::float_t tf;
                 std::float_t idf;
@@ -149,14 +149,16 @@ private:
                 }
 
                 //temperarily put output in a vector for future normalization
-                results.emplace_back(std::make_tuple(static_cast<std::uint32_t>(iter_label->second), tfidf));
+                results.emplace_back(std::make_tuple(labelIter->second, tfidf));
             }
         }
+        //normVal will never be 0 as long as results is not empty
+        if (normVal == 0.0f)
+            throw std::runtime_error("This happens when the input document is empty");
 
         // l2-norm calibration
-        if (Norm == "l2") {
+        if (Norm == "l2")
             normVal = sqrt(normVal);
-        }   
 
         for (auto & result : results) {
             callback(TFIDFStruct(std::get<0>(result), std::get<1>(result) / normVal));
@@ -184,6 +186,7 @@ public:
     using BaseType                          = TransformerEstimator<std::string, TFIDFStruct>;
     using TransformerType                   = TfidfVectorizerTransformer;
     using IndexMap                          = TfidfVectorizerTransformer::IndexMap;
+    using FrequencyMap                      = TfidfVectorizerTransformer::FrequencyMap;
     // ----------------------------------------------------------------------
     // |
     // |  Public Methods
@@ -247,14 +250,23 @@ private:
                                                         termFrequencyAndIndex(data.TermFrequencyAndIndex);
         std::uint32_t const                             totalNumDocus(data.TotalNumDocuments);
 
-        IndexMap termFrequency;
+        FrequencyMap termFrequency;
         IndexMap termIndex;
         for (auto const & termFrequencyAndIndexPair : termFrequencyAndIndex) {
+            //termFrequency and termIndex share the exactly same keys
             termFrequency.insert(std::make_pair(termFrequencyAndIndexPair.first, termFrequencyAndIndexPair.second.TermFrequency));
             termIndex.insert(std::make_pair(termFrequencyAndIndexPair.first, termFrequencyAndIndexPair.second.Index));
         }
 
-        return std::make_unique<TfidfVectorizerTransformer>(termIndex, termFrequency, totalNumDocus, _binary, _norm, _use_idf, _smooth_idf, _sublinear_tf);
+        return std::make_unique<TfidfVectorizerTransformer>(std::move(termIndex), 
+                                                            std::move(termFrequency),
+                                                            std::move(totalNumDocus), 
+                                                            std::move(_binary), 
+                                                            std::move(_norm), 
+                                                            std::move(_use_idf), 
+                                                            std::move(_smooth_idf), 
+                                                            std::move(_sublinear_tf)
+                                                            );
     }
 };
 
@@ -324,12 +336,12 @@ public:
 // |  TFIDFStruct
 // |
 // ----------------------------------------------------------------------
-bool TFIDFStruct::operator==(TFIDFStruct const &other) const {
-    return (dictionaryId == other.dictionaryId) && (abs(tfidf - other.tfidf) < 0.000001f);
+TFIDFStruct::TFIDFStruct(std::uint32_t dictionaryId, std::float_t tfidfValue) :
+    DictionaryId(std::move(dictionaryId)),
+    TfidfValue(std::move(tfidfValue)) {
 }
-TFIDFStruct::TFIDFStruct(std::uint32_t d, std::float_t t) :
-    dictionaryId(std::move(d)),
-    tfidf(std::move(t)) {
+bool TFIDFStruct::operator==(TFIDFStruct const &other) const {
+    return (DictionaryId == other.DictionaryId) && (abs(TfidfValue - other.TfidfValue) < 0.000001f);
 }
 
 // ----------------------------------------------------------------------
@@ -455,13 +467,15 @@ TfidfVectorizerEstimator<MaxNumTrainingItemsV>::TfidfVectorizerEstimator(
 // |
 // ----------------------------------------------------------------------
 template <size_t MaxNumTrainingItemsV>
-Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>::TfidfVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, 
-                                                                                          size_t colIndex, 
-                                                                                          bool binary, 
-                                                                                          std::string norm, 
-                                                                                          bool use_idf, 
-                                                                                          bool smooth_idf, 
-                                                                                          bool sublinear_tf) :
+Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>::TfidfVectorizerEstimatorImpl(
+    AnnotationMapsPtr pAllColumnAnnotations, 
+    size_t colIndex, 
+    bool binary, 
+    std::string norm, 
+    bool use_idf, 
+    bool smooth_idf, 
+    bool sublinear_tf
+) :
     BaseType("TfidfVectorizerEstimatorImpl", std::move(pAllColumnAnnotations)),
     _colIndex(
         std::move(
@@ -501,6 +515,6 @@ template <size_t MaxNumTrainingItemsV>
 void Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>::complete_training_impl(void) /*override*/ {
 }
 
-}
-}
-}
+} // namespace Featurizers
+} // namespace Featurizer
+} // namespace Microsoft
