@@ -113,14 +113,7 @@ TEST_CASE("string_nobinary_0.5-1.0") {
 
     CHECK(
         NS::TestHelpers::TransformerEstimatorTest(
-            NS::Featurizers::CountVectorizerEstimator<std::numeric_limits<size_t>::max()>(NS::CreateTestAnnotationMapsPtr(1), 
-                                                                                          0, 
-                                                                                          false, 
-                                                                                          StringDecorator(), 
-                                                                                          nonstd::optional<IndexMap>(), 
-                                                                                          nonstd::optional<std::uint32_t>(), 
-                                                                                          0.5f, 
-                                                                                          1.0f),
+            NS::Featurizers::CountVectorizerEstimator<std::numeric_limits<size_t>::max()>(NS::CreateTestAnnotationMapsPtr(1), 0, false, 0.5f, 1.0f),
             trainingBatches,
             inferencingInput
         )== inferencingOutput

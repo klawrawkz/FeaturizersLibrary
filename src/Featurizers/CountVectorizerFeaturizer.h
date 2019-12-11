@@ -216,11 +216,11 @@ public:
         AnnotationMapsPtr pAllColumnAnnotations, 
         size_t colIndex, 
         bool binary = false,
+        std::float_t minDf = 0.0f, 
+        std::float_t maxDf = 1.0f,
         StringDecorator decorator = StringDecorator(), 
         nonstd::optional<IndexMap> vocabulary = nonstd::optional<IndexMap>(), 
-        nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>(), 
-        std::float_t minDf = 0.0f, 
-        std::float_t maxDf = 1.0f
+        nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>()
     );
     ~CountVectorizerEstimator(void) override = default;
 
@@ -293,11 +293,11 @@ CountVectorizerEstimator<MaxNumTrainingItemsV>::CountVectorizerEstimator(
     AnnotationMapsPtr pAllColumnAnnotations, 
     size_t colIndex, 
     bool binary,
+    std::float_t minDf, 
+    std::float_t maxDf,
     StringDecorator decorator, 
     nonstd::optional<IndexMap> vocabulary, 
-    nonstd::optional<std::uint32_t> maxFeatures, 
-    std::float_t minDf, 
-    std::float_t maxDf
+    nonstd::optional<std::uint32_t> maxFeatures
 ) :
     BaseType(
         "CountVectorizerEstimator",

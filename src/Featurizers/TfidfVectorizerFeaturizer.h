@@ -306,15 +306,15 @@ public:
         AnnotationMapsPtr pAllColumnAnnotations, 
         size_t colIndex, 
         bool binary = false,
-        StringDecorator decorator = StringDecorator(), 
-        nonstd::optional<IndexMap> vocabulary = nonstd::optional<IndexMap>(), 
-        nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>(), 
-        std::float_t minDf = 0.0f, 
-        std::float_t maxDf = 1.0f,  
         std::string norm = "l2", 
         bool use_idf = true, 
         bool smooth_idf = true, 
-        bool sublinear_tf = false
+        bool sublinear_tf = false,
+        std::float_t minDf = 0.0f, 
+        std::float_t maxDf = 1.0f,
+        StringDecorator decorator = StringDecorator(), 
+        nonstd::optional<IndexMap> vocabulary = nonstd::optional<IndexMap>(), 
+        nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>()
     );
     ~TfidfVectorizerEstimator(void) override = default;
 
@@ -354,20 +354,20 @@ TfidfVectorizerTransformer::TfidfVectorizerTransformer(IndexMap labels, IndexMap
     Labels(
         std::move(
             [&labels](void) ->  IndexMap & {
-            if (labels.size() == 0) {
-                throw std::invalid_argument("Index map is empty!");
-            }
-            return labels;
+                if (labels.size() == 0) {
+                    throw std::invalid_argument("Index map is empty!");
+                }
+                return labels;
             }()
         )
     ),
     DocumentFreq(
         std::move(
             [&docufreq](void) ->  IndexMap & {
-            if (docufreq.size() == 0) {
-                throw std::invalid_argument("DocumentFrequency map is empty!");
-            }
-            return docufreq;
+                if (docufreq.size() == 0) {
+                    throw std::invalid_argument("DocumentFrequency map is empty!");
+                }
+                return docufreq;
             }()
         )
     ),
@@ -423,15 +423,15 @@ TfidfVectorizerEstimator<MaxNumTrainingItemsV>::TfidfVectorizerEstimator(
     AnnotationMapsPtr pAllColumnAnnotations, 
     size_t colIndex, 
     bool binary,
-    StringDecorator decorator, 
-    nonstd::optional<IndexMap> vocabulary, 
-    nonstd::optional<std::uint32_t> maxFeatures, 
-    std::float_t minDf, 
-    std::float_t maxDf,  
     std::string norm, 
     bool use_idf, 
     bool smooth_idf, 
-    bool sublinear_tf
+    bool sublinear_tf,
+    std::float_t minDf, 
+    std::float_t maxDf,
+    StringDecorator decorator, 
+    nonstd::optional<IndexMap> vocabulary, 
+    nonstd::optional<std::uint32_t> maxFeatures
 ) :
     BaseType(
         "TfidfVectorizerEstimator",
