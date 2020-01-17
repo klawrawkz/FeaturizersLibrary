@@ -4,7 +4,10 @@
 // ----------------------------------------------------------------------
 #pragma once
 
+#include <algorithm>
+#include <iterator>
 #include <unordered_map>
+#include <queue>
 #include <set>
 
 #include "TrainingOnlyEstimatorImpl.h"
@@ -16,6 +19,13 @@ namespace Featurizers {
 namespace Components {
 
 namespace {
+
+//this is temporary decorator
+inline std::string decorator_temp(std::string::const_iterator begin, std::string::const_iterator end) {
+    std::string result(begin, end);
+    std::transform(result.begin(), result.end(), result.begin(), [](char c) { return std::tolower(c); });
+    return result;
+}
 
 //this is temporary split algorithm
 inline void split_temp(std::string const & input, std::function<void (std::string::const_iterator&, std::string::const_iterator&)> const & callback) {
@@ -75,6 +85,21 @@ struct IterRangeComp {
 static constexpr char const * const         DocumentStatisticsEstimatorName("DocumentStatisticsEstimator");
 
 /////////////////////////////////////////////////////////////////////////
+///  \struct        FrequencyAndIndexStruct
+///  \brief         This struct is a combination of values of FrequencyMap and
+///                 IndexMap for the purpose of keys equivelence of two maps
+///
+struct FrequencyAndIndexStruct {
+    std::uint32_t const TermFrequency;                            // Words and the number of documents that it appears in
+    std::uint32_t const Index;
+
+    //copy needed in generating FrequencyAndIndexMap
+    //FEATURIZER_MOVE_CONSTRUCTOR_ONLY(FrequencyAndIndexStruct);
+    FrequencyAndIndexStruct(std::uint32_t termFrequency, std::uint32_t index);
+    bool operator==(FrequencyAndIndexStruct const &other) const;
+};
+
+/////////////////////////////////////////////////////////////////////////
 ///  \class         DocumentStatisticsAnnotationData
 ///  \brief         Collection about statistics found within a number of
 ///                 documents.
@@ -86,16 +111,13 @@ public:
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using FrequencyMap                      = std::unordered_map<std::string, std::uint32_t>;
-    using IndexMap                          = FrequencyMap;
-
+    using FrequencyAndIndexMap              = std::unordered_map<std::string, FrequencyAndIndexStruct>;
     // ----------------------------------------------------------------------
     // |
     // |  Public Data
     // |
     // ----------------------------------------------------------------------
-    FrequencyMap const                      TermFrequency;                  /// Words and the number of documents that it appears in
-    IndexMap const                          TermIndex;
+    FrequencyAndIndexMap const              TermFrequencyAndIndex;
     std::uint32_t const                     TotalNumDocuments;
 
     // ----------------------------------------------------------------------
@@ -103,7 +125,7 @@ public:
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    DocumentStatisticsAnnotationData(FrequencyMap termFreq, IndexMap termIndex, std::uint32_t totalNumDocuments);
+    DocumentStatisticsAnnotationData(FrequencyAndIndexMap termFrequencyAndIndex, std::uint32_t totalNumDocuments);
     ~DocumentStatisticsAnnotationData(void) = default;
 
     FEATURIZER_MOVE_CONSTRUCTOR_ONLY(DocumentStatisticsAnnotationData);
@@ -129,7 +151,8 @@ public:
     using InputType                         = std::string;
     using InputTypeConstIterator            = std::string::const_iterator;
     using StringDecorator                   = std::function<std::string (InputTypeConstIterator begin, InputTypeConstIterator end)>;
-    using IndexMap                          = DocumentStatisticsAnnotationData::IndexMap;
+    using IndexMap                          = std::unordered_map<std::string, std::uint32_t>;
+    using FrequencyMap                      = IndexMap;
 
     // ----------------------------------------------------------------------
     // |
@@ -143,8 +166,13 @@ public:
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    DocumentStatisticsTrainingOnlyPolicy(void);
-    DocumentStatisticsTrainingOnlyPolicy(StringDecorator decorator);
+    DocumentStatisticsTrainingOnlyPolicy(
+        StringDecorator decorator,
+        nonstd::optional<IndexMap> vocabulary,
+        nonstd::optional<std::uint32_t> topKTerms,
+        std::float_t minDf,
+        std::float_t maxDf
+    );
 
     void fit(InputType const &input);
     DocumentStatisticsAnnotationData complete_training(void);
@@ -155,14 +183,18 @@ private:
     // |  Private Types
     // |
     // ----------------------------------------------------------------------
-    using FrequencyMap                      = typename DocumentStatisticsAnnotationData::FrequencyMap;
-
+    using FrequencyAndIndexMap              = DocumentStatisticsAnnotationData::FrequencyAndIndexMap;
     // ----------------------------------------------------------------------
     // |
     // |  Private Data
     // |
     // ----------------------------------------------------------------------
     StringDecorator const                   _stringDecoratorFunc;
+
+    nonstd::optional<IndexMap> const        _existingVocabulary;
+    nonstd::optional<std::uint32_t> const   _topKTerms;
+    std::float_t const                      _minDf;
+    std::float_t const                      _maxDf;
 
     FrequencyMap                            _termFrequency;
     std::uint32_t                           _totalNumDocuments;
@@ -194,8 +226,34 @@ private:
 template <
     size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()
 >
-using DocumentStatisticsEstimator           = Components::TrainingOnlyEstimatorImpl<Details::DocumentStatisticsTrainingOnlyPolicy, MaxNumTrainingItemsV>;
+class DocumentStatisticsEstimator : public TrainingOnlyEstimatorImpl<Details::DocumentStatisticsTrainingOnlyPolicy, MaxNumTrainingItemsV> {
+public:
+    // ----------------------------------------------------------------------
+    // |
+    // |  Public Types
+    // |
+    // ----------------------------------------------------------------------
+    using BaseType                          = TrainingOnlyEstimatorImpl<Details::DocumentStatisticsTrainingOnlyPolicy, MaxNumTrainingItemsV>;
+    using StringDecorator                   = Details::DocumentStatisticsTrainingOnlyPolicy::StringDecorator;
+    using IndexMap                          = Details::DocumentStatisticsTrainingOnlyPolicy::IndexMap;
+    // ----------------------------------------------------------------------
+    // |
+    // |  Public Methods
+    // |
+    // ----------------------------------------------------------------------
+    DocumentStatisticsEstimator(
+        AnnotationMapsPtr pAllColumnAnnotations,
+        size_t colIndex,
+        StringDecorator decorator,
+        nonstd::optional<IndexMap> vocabulary,
+        nonstd::optional<std::uint32_t> topKTerms,
+        std::float_t minDf,
+        std::float_t maxDf
+    );
+    ~DocumentStatisticsEstimator(void) override = default;
 
+    FEATURIZER_MOVE_CONSTRUCTOR_ONLY(DocumentStatisticsEstimator);
+};
 // ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
@@ -208,27 +266,32 @@ using DocumentStatisticsEstimator           = Components::TrainingOnlyEstimatorI
 
 // ----------------------------------------------------------------------
 // |
+// |  FrequencyAndIndexStruct
+// |
+// ----------------------------------------------------------------------
+FrequencyAndIndexStruct::FrequencyAndIndexStruct(std::uint32_t termFrequency, std::uint32_t index) :
+    //validate not necessary in this assignment
+    TermFrequency(std::move(termFrequency)),
+    Index(std::move(index)) {
+}
+
+bool FrequencyAndIndexStruct::operator==(FrequencyAndIndexStruct const &other) const {
+    return (TermFrequency == other.TermFrequency) && (Index == other.Index);
+}
+
+// ----------------------------------------------------------------------
+// |
 // |  DocumentStatisticsAnnotationData
 // |
 // ----------------------------------------------------------------------
-inline DocumentStatisticsAnnotationData::DocumentStatisticsAnnotationData(FrequencyMap termFreq, IndexMap termIndex, std::uint32_t totalNumDocuments) :
-    TermFrequency(
+inline DocumentStatisticsAnnotationData::DocumentStatisticsAnnotationData(FrequencyAndIndexMap termFrequencyAndIndex, std::uint32_t totalNumDocuments) :
+    TermFrequencyAndIndex(
         std::move(
-            [&termFreq](void) -> FrequencyMap & {
-                if(termFreq.empty())
-                    throw std::invalid_argument("termFreq");
+            [&termFrequencyAndIndex](void) -> FrequencyAndIndexMap & {
+                if(termFrequencyAndIndex.empty())
+                    throw std::invalid_argument("termFrequencyAndIndex");
 
-                return termFreq;
-            }()
-        )
-    ),
-    TermIndex(
-        std::move(
-            [&termIndex](void) -> IndexMap & {
-                if(termIndex.empty())
-                    throw std::invalid_argument("termIndex");
-
-                return termIndex;
+                return termFrequencyAndIndex;
             }()
         )
     ),
@@ -246,23 +309,211 @@ inline DocumentStatisticsAnnotationData::DocumentStatisticsAnnotationData(Freque
 
 // ----------------------------------------------------------------------
 // |
+// |  DocumentStatisticsEstimator
+// |
+// ----------------------------------------------------------------------
+//Would it be better to place default values during pipeline chaining(countvectorizer and tfidfvectorizer)? if so this ctor will show no default values
+template <size_t MaxNumTrainingItemsV>
+DocumentStatisticsEstimator<MaxNumTrainingItemsV>::DocumentStatisticsEstimator(
+    AnnotationMapsPtr pAllColumnAnnotations,
+    size_t colIndex,
+    StringDecorator decorator,
+    nonstd::optional<IndexMap> existingVocabulary,
+    nonstd::optional<std::uint32_t> topKTerms,
+    std::float_t minDf,
+    std::float_t maxDf
+) :
+    BaseType(
+        std::move(pAllColumnAnnotations),
+        std::move(colIndex),
+        true,
+        std::move(decorator),
+        std::move(existingVocabulary),
+        std::move(topKTerms),
+        std::move(minDf),
+        std::move(maxDf)
+    ) {
+}
+
+// ----------------------------------------------------------------------
+// |
+// |  Anonymous namespace
+// |
+// ----------------------------------------------------------------------
+namespace {
+
+inline Details::DocumentStatisticsTrainingOnlyPolicy::FrequencyMap PruneTermFreqMap(Details::DocumentStatisticsTrainingOnlyPolicy::FrequencyMap termFrequency,
+                                                                                    std::float_t minDf,
+                                                                                    std::float_t maxDf,
+                                                                                    std::float_t totalNumDocumentsFloat,
+                                                                                    nonstd::optional<std::uint32_t> topKTerms) {
+
+    using FrequencyMap = Details::DocumentStatisticsTrainingOnlyPolicy::FrequencyMap;
+
+    //trim by minDf and maxDf
+    if (minDf > 0.0f || maxDf < 1.0f) {
+        FrequencyMap::iterator termFrequencyIter = termFrequency.begin();
+        while (termFrequencyIter != termFrequency.end()) {
+            std::float_t const freq = termFrequencyIter->second / totalNumDocumentsFloat;
+
+            if (freq < minDf || freq > maxDf) {
+                termFrequencyIter = termFrequency.erase(termFrequencyIter);
+            } else {
+                ++termFrequencyIter;
+            }
+        }
+    }
+
+    //trim by topKTerms
+    if (!topKTerms.has_value() || termFrequency.empty() || *topKTerms >= termFrequency.size())
+        return termFrequency;
+
+    std::uint32_t const & topKTermsValue(*topKTerms);
+
+    std::tuple<std::uint32_t, long long> targetPack(
+        [&termFrequency, &topKTermsValue]() -> std::tuple<std::uint32_t, long long> {
+            std::vector<std::uint32_t> frequencyVector;
+            frequencyVector.reserve(termFrequency.size());
+
+            std::transform(
+                termFrequency.begin(),
+                termFrequency.end(),
+                std::back_inserter(frequencyVector),
+                [](auto const & kv) {
+                    return kv.second;
+                }
+            );
+
+            //partial sort, ave O(n)
+            std::nth_element(
+                frequencyVector.begin(),
+                frequencyVector.begin() + static_cast<int>(topKTermsValue) - 1,
+                frequencyVector.end(),
+                std::greater<std::uint32_t>()
+            );
+
+            std::uint32_t targetValue = frequencyVector[topKTermsValue - 1];
+            long long remainingTargetValue = std::count(
+                frequencyVector.begin(),
+                frequencyVector.begin() + static_cast<int>(topKTermsValue),
+                targetValue
+            );
+
+            return std::make_tuple<std::uint32_t, long long>(
+                std::move(targetValue),
+                std::move(remainingTargetValue)
+            );
+        }()
+    );
+
+    std::uint32_t targetValue = std::get<0>(targetPack);
+    long long remainingTargetValue = std::get<1>(targetPack);
+
+    FrequencyMap::iterator termFrequencyIter = termFrequency.begin();
+    while (termFrequencyIter != termFrequency.end()) {
+        if (termFrequencyIter->second < targetValue) {
+            termFrequencyIter = termFrequency.erase(termFrequencyIter);
+            continue;
+        } else if (termFrequencyIter->second == targetValue) {
+            if (remainingTargetValue == 0) {
+               termFrequencyIter = termFrequency.erase(termFrequencyIter);
+            } else {
+                ++termFrequencyIter;
+                --remainingTargetValue;
+            }
+        } else {
+            ++termFrequencyIter;
+        }
+    }
+
+    return termFrequency;
+}
+
+inline DocumentStatisticsAnnotationData::FrequencyAndIndexMap MergeTwoMapsWithSameKeys(Details::DocumentStatisticsTrainingOnlyPolicy::FrequencyMap termFrequency,
+                                                                                       Details::DocumentStatisticsTrainingOnlyPolicy::IndexMap termIndex) {
+    DocumentStatisticsAnnotationData::FrequencyAndIndexMap termFrequencyAndIndex;
+    for (auto const & termFrequencyIter : termFrequency) {
+        //assert that termFrequencyIter.first is in termIndex
+        auto termIndexIter = termIndex.find(termFrequencyIter.first);
+        if (termIndexIter == termIndex.end())
+            throw std::invalid_argument("the keys in termFrequency and termIndex do not match");
+
+        FrequencyAndIndexStruct value(std::move(termFrequencyIter.second), std::move(termIndexIter->second));
+        // termFrequencyAndIndex.emplace(
+        //     DocumentStatisticsAnnotationData::FrequencyAndIndexMap::value_type(
+        //         std::move(termFrequencyIter.first),
+        //         std::move(value)
+        //     )
+        // );
+        //FrequencyAndIndexStruct value(termFrequencyIter.second, termIndex.at(termFrequencyIter.first));
+        //termFrequencyAndIndex.emplace(std::make_pair(termFrequencyIter.first, std::move(value)));
+        termFrequencyAndIndex.emplace(std::move(termFrequencyIter.first), std::move(value));
+    }
+    return termFrequencyAndIndex;
+}
+
+}
+// ----------------------------------------------------------------------
+// |
 // |  Details::DocumentStatisticsTrainingOnlyPolicy
 // |
 // ----------------------------------------------------------------------
-inline Details::DocumentStatisticsTrainingOnlyPolicy::DocumentStatisticsTrainingOnlyPolicy(void) :
-    _totalNumDocuments(0) {
-}
-
-inline Details::DocumentStatisticsTrainingOnlyPolicy::DocumentStatisticsTrainingOnlyPolicy(StringDecorator decorator) :
+inline Details::DocumentStatisticsTrainingOnlyPolicy::DocumentStatisticsTrainingOnlyPolicy(
+    StringDecorator decorator,
+    nonstd::optional<IndexMap> existingVocabulary,
+    nonstd::optional<std::uint32_t> topKTerms,
+    std::float_t minDf,
+    std::float_t maxDf
+) :
     _stringDecoratorFunc(
         [&decorator](void) -> StringDecorator & {
-            if(!decorator)
-                throw std::invalid_argument("decorator");
-
+            //no need to validate this as !decorator is a choice
             return decorator;
         }()
     ),
+    _existingVocabulary(
+        std::move(
+            [&existingVocabulary](void) -> nonstd::optional<IndexMap> & {
+                if(existingVocabulary.has_value() && existingVocabulary->empty())
+                    throw std::invalid_argument("existingVocabulary");
+
+                return existingVocabulary;
+            }()
+        )
+    ),
+    _topKTerms(
+        std::move(
+            [&topKTerms](void) -> nonstd::optional<std::uint32_t> & {
+                if(topKTerms.has_value() && *topKTerms == 0)
+                    throw std::invalid_argument("topKTermsLowerBound");
+
+                return topKTerms;
+            }()
+        )
+    ),
+    _minDf(
+        std::move(
+            [&minDf](void) -> std::float_t & {
+                if(minDf < 0.0f || minDf > 1.0f)
+                    throw std::invalid_argument("minDf");
+
+                return minDf;
+            }()
+        )
+    ),
+    _maxDf(
+        std::move(
+            [&maxDf](void) -> std::float_t & {
+                if(maxDf < 0.0f || maxDf > 1.0f)
+                    throw std::invalid_argument("maxDf");
+
+                return maxDf;
+            }()
+        )
+    ),
     _totalNumDocuments(0) {
+        if (_minDf > _maxDf)
+            throw std::invalid_argument("_minDf > _maxDf");
 }
 
 inline void Details::DocumentStatisticsTrainingOnlyPolicy::fit(InputType const &input) {
@@ -296,8 +547,21 @@ inline void Details::DocumentStatisticsTrainingOnlyPolicy::fit(InputType const &
 }
 
 inline DocumentStatisticsAnnotationData Details::DocumentStatisticsTrainingOnlyPolicy::complete_training(void) {
-    IndexMap                                termIndex(Microsoft::Featurizer::Featurizers::Components::CreateIndexMap<std::string>(_termFrequency, IndexMap()));
-    return DocumentStatisticsAnnotationData(std::move(_termFrequency), std::move(termIndex), std::move(_totalNumDocuments));
+
+    //prune map by maxDf, minDf and topKTerms
+    FrequencyMap                            prunedTermFreq(PruneTermFreqMap(std::move(_termFrequency), _minDf, _maxDf, static_cast<std::float_t>(_totalNumDocuments), _topKTerms));
+
+    //In general, the custom vocabulary should assign values to words that no bigger than the map's size
+    //however, some may choose to use unique values. We do not check if the given vocabulary is appropriate
+    //But suggest customer use reasonable mapping
+    IndexMap                                termIndex(Microsoft::Featurizer::Featurizers::Components::CreateIndexMap<std::string>(prunedTermFreq,
+                                                                                                                                  _existingVocabulary.has_value() ? *_existingVocabulary : IndexMap()));
+
+    //here the termIndex includes(strictly) termFrequency, which means termIndex has all the keys that appear in termFrequency, but may has some keys not in termFrequency
+    //ignore the additional keys in termIndex
+    FrequencyAndIndexMap                    termFrequencyAndIndex(MergeTwoMapsWithSameKeys(std::move(prunedTermFreq), std::move(termIndex)));
+
+    return DocumentStatisticsAnnotationData(std::move(termFrequencyAndIndex), std::move(_totalNumDocuments));
 }
 
 // ----------------------------------------------------------------------
