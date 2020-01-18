@@ -145,6 +145,8 @@ TEST_CASE("string_idf_custom_decorator") {
                                                             {"orange ORANGE peach   peach orange "}});
     //parameter initialization
     StringDecorator decorator = NS::Featurizers::Components::decorator_temp;
+    //StringDecorator decorator = Microsoft::Featurizer::ToLower<std::string::const_iterator>;
+
     nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
     nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>();
     std::float_t minDf = 0.0f;

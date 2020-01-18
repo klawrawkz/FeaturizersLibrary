@@ -4,22 +4,26 @@
 // ----------------------------------------------------------------------
 #pragma once
 
+#include <algorithm>
+#include <iterator>
+
 namespace Microsoft {
 namespace Featurizer {
 
+template <typename IteratorT>
+inline std::string ToLower(IteratorT begin, IteratorT end) {
+    std::string result(begin, end);
+    std::transform(result.begin(), result.end(), result.begin(), [](char c) { return std::tolower(c); });
+    return result;
+}
 
+template <typename IteratorT>
+inline std::string ToUpper(IteratorT begin, IteratorT end) {
+    std::string result(begin, end);
+    std::transform(result.begin(), result.end(), result.begin(), [](char c) { return std::toupper(c); });
+    return result;
+}
 
-
-
-// //casing. todo: locale
-// template<typename IteratorT>
-// inline IteratorT to_lower_copy(const IteratorT& inputbegin, const IteratorT& inputend);
-// template<typename IteratorT>
-// inline IteratorT to_lower(IteratorT& inputbegin, IteratorT& inputend);
-// template<typename IteratorT>
-// inline IteratorT to_upper(const IteratorT& inputbegin, const IteratorT& inputend);
-// template<typename IteratorT>
-// inline IteratorT to_upper(IteratorT& inputbegin, IteratorT& inputend);
 
 // //trim
 // template<typename IteratorT, typename PredicateT>
@@ -39,6 +43,29 @@ namespace Featurizer {
 // inline IteratorT trim_all(const IteratorT& inputbegin, const IteratorT& inputend, PredicateT isspace);
 // template<typename IteratorT, typename PredicateT>
 // inline IteratorT trim_all(IteratorT& inputbegin, IteratorT& inputend, PredicateT isspace);
+
+template <typename IteratorT, typename IsDelimiterT>
+inline void Parse(std::string const &input, IsDelimiterT const &isDelimiter, std::function<void (IteratorT&, IteratorT&)> const &callback) {
+    IteratorT left = input.begin();
+    IteratorT right = left;
+    while (left != input.end() && *left == isDelimiter)
+        ++left;
+
+    right = left;
+    while (right != input.end()) {
+        if (*right == isDelimiter) {
+            callback(left, right);
+            left = right;
+            while (left != input.end() && *left == isDelimiter)
+                ++left;
+            right = left;
+        } else {
+            ++right;
+        }
+    }
+    if (left != right)
+        callback(left, right);
+}
 
 // //parse
 // template<typename IteratorT, typename PredicateT>

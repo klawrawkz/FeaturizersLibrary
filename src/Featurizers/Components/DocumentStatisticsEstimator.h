@@ -12,6 +12,7 @@
 
 #include "TrainingOnlyEstimatorImpl.h"
 #include "IndexMapEstimator.h"
+#include "../../Strings.h"
 
 namespace Microsoft {
 namespace Featurizer {
@@ -577,6 +578,14 @@ void Details::DocumentStatisticsTrainingOnlyPolicy::fit_impl(InputType const &in
             documents.insert(createKeyFunc(begin, end));
         }
     );
+
+    // Microsoft::Featurizer::Parse<std::string::const_iterator, char>(
+    //     input,
+    //     ' ',
+    //     [&createKeyFunc, &documents](InputTypeConstIterator begin, InputTypeConstIterator end) {
+    //         documents.insert(createKeyFunc(begin, end));
+    //     }
+    // );
 
     auto const                              getCountFunc(
         [this, &keyToStringFunc](typename SetT::value_type const &key) -> typename FrequencyMap::mapped_type & {
