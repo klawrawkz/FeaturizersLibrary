@@ -24,25 +24,40 @@ inline std::string ToUpper(IteratorT begin, IteratorT end) {
     return result;
 }
 
+template <typename IteratorT, typename PredicateT>
+inline std::string TrimLeft(IteratorT begin, IteratorT end, PredicateT isPredicate) {
+    while (begin != end) {
+        if (*begin == isPredicate)
+            ++begin;
+        else
+            break;
+    }
+    return std::string(begin, end);
+}
 
-// //trim
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim_left(const IteratorT& inputbegin, const IteratorT& inputend, PredicateT isspace);
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim_left(IteratorT& inputbegin, IteratorT& inputend, PredicateT isspace);
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim_right(const IteratorT& inputbegin, const IteratorT& inputend, PredicateT isspace);
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim_right(IteratorT& inputbegin, IteratorT& inputend, PredicateT isspace);
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim(const IteratorT& inputbegin, const IteratorT& inputend, PredicateT isspace);
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim(IteratorT& inputbegin, IteratorT& inputend, PredicateT isspace);
-// //Remove all leading and trailing spaces from the input and compress all other spaces to a single character.
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim_all(const IteratorT& inputbegin, const IteratorT& inputend, PredicateT isspace);
-// template<typename IteratorT, typename PredicateT>
-// inline IteratorT trim_all(IteratorT& inputbegin, IteratorT& inputend, PredicateT isspace);
+template <typename IteratorT, typename PredicateT>
+inline std::string TrimRight(IteratorT begin, IteratorT end, PredicateT isPredicate) {
+    while (begin != end) {
+        if (*end == isPredicate)
+            --end;
+        else
+            break;
+    }
+    return std::string(begin, end);
+}
+
+template <typename IteratorT, typename PredicateT>
+inline std::string Trim(IteratorT begin, IteratorT end, PredicateT isPredicate) {
+    while (begin != end) {
+        if (*begin == isPredicate)
+            ++begin;
+        else if (*end == isPredicate)
+            --end;
+        else
+            break;
+    }
+    return std::string(begin, end);
+}
 
 template <typename IteratorT, typename IsDelimiterT>
 inline void Parse(std::string const &input, IsDelimiterT const &isDelimiter, std::function<void (IteratorT&, IteratorT&)> const &callback) {
@@ -67,11 +82,6 @@ inline void Parse(std::string const &input, IsDelimiterT const &isDelimiter, std
         callback(left, right);
 }
 
-// //parse
-// template<typename IteratorT, typename PredicateT>
-// inline std::vector<std::tuple<IteratorT, IteratorT>> parse(const IteratorT& inputbegin, const IteratorT& inputend, PredicateT ispunct);
-// template<typename IteratorT, typename RegexT>
-// inline std::vector<std::tuple<IteratorT, IteratorT>> parse(const IteratorT& inputbegin, const IteratorT& inputend, const RegexT& re, "flag");
 
 
 // //ngram
