@@ -54,6 +54,22 @@ void ParseNgramWordTest(std::string const & input,
     CHECK(output == label);
 }
 
+void ParseNgramCharTest(std::string const & input,
+                        std::vector<std::string> const & label,
+                        size_t ngramRangeMin,
+                        size_t ngramRangeMax) {
+    std::vector<std::string> output;
+    ParseNgramCharCopy<std::string::const_iterator>(
+        input,
+        ngramRangeMin,
+        ngramRangeMax,
+        [&output] (std::string::const_iterator & iterBegin, std::string::const_iterator & iterEnd) {
+            output.emplace_back(std::string(iterBegin, iterEnd));
+        }
+    );
+    CHECK(output == label);
+}
+
 TEST_CASE("ToLower") {
     std::string input("THIS IS THE FIRST DOCUMENT.");
     std::string label("this is the first document.");
@@ -137,23 +153,20 @@ TEST_CASE("ParseNgramWord") {
     ParseNgramWordTest(" bi-grams    are cool! ", {"bi grams", "grams are", "are cool", "bi grams are", "grams are cool"}, ' ', 2, 3);
 }
 
+TEST_CASE("ParseNgramChar") {
+    CHECK_THROWS_WITH(ParseNgramCharTest("hi", {"hi"}, 0, 3), "ngramRangeMin and ngramRangeMax not valid");
+    ParseNgramCharTest("jumpy   ?? fox", {"j", "u", "m", "p", "y", " ", "f", "o", "x"}, 1, 1);
+    ParseNgramCharTest("jumpy   ?? fox", {"ju", "um", "mp", "py", "y ", " f", "fo", "ox"}, 2, 2);
+    ParseNgramCharTest("jumpy   ?? fox", {"jum", "ump", "mpy", "py ", "y f", " fo", "fox"}, 3, 3);
+    ParseNgramCharTest("jumpy   ?? fox", {"jump", "umpy", "mpy ", "py f", "y fo", " fox"}, 4, 4);
+    ParseNgramCharTest("jumpy   ?? fox", {"jumpy", "umpy ", "mpy f", "py fo", "y fox"}, 5, 5);
+    ParseNgramCharTest("jumpy   ?? fox", {"jumpy ", "umpy f", "mpy fo", "py fox"}, 6, 6);
+    ParseNgramCharTest("jumpy   ?? fox", {"jumpy f", "umpy fo", "mpy fox"}, 7, 7);
+    ParseNgramCharTest("jumpy   ?? fox", {"jumpy fo", "umpy fox"}, 8, 8);
+    ParseNgramCharTest("jumpy   ?? fox", {"jumpy fox"}, 9, 9);
+}
 
-// TEST_CASE("TextPreprocessorTransformer_ngramsword") {
-//     std::vector<std::string> stopwords({});
-//     NS::Featurizers::Components::TextPreprocessorTransformer tp(true, "\\s+", stopwords, "ascii", 1, 2, "word");
-//     std::string input(" Bi-grams    are cool! ");
-//     std::vector<std::string> label({"bi", "grams", "are", "cool", "bi grams", "grams are", "are cool"});
-//     std::vector<std::string> out = tp.execute(input);
-//     CHECK(out == label);
-// }
-// TEST_CASE("TextPreprocessorTransformer_ngramschar") {
-//     std::vector<std::string> stopwords({});
-//     NS::Featurizers::Components::TextPreprocessorTransformer tp(true, "\\s+", stopwords, "ascii", 5, 5, "char");
-//     std::string input("jumpy fox");
-//     std::vector<std::string> label({"jumpy", "umpy ", "mpy f", "py fo", "y fox"});
-//     std::vector<std::string> out = tp.execute(input);
-//     CHECK(out == label);
-// }
+
 // TEST_CASE("TextPreprocessorTransformer_ngramscharwb") {
 //     std::vector<std::string> stopwords({});
 //     NS::Featurizers::Components::TextPreprocessorTransformer tp(true, "\\s+", stopwords, "ascii", 5, 5, "char_wb");
@@ -162,22 +175,4 @@ TEST_CASE("ParseNgramWord") {
 //     std::vector<std::string> out = tp.execute(input);
 //     CHECK(out == label);
 // }
-// TEST_CASE("TextPreprocessorTransformer_lowercase_unicode") {
-//     std::vector<std::string> stopwords({});
-//     NS::Featurizers::Components::TextPreprocessorTransformer tp(true, "\\s+", stopwords, "unicode", 1, 1, "word");
-//     NS::Featurizers::Components::Utf8Converter converter(conv_error, wconv_error);
-// #if (defined __clang__)
-// #   pragma clang diagnostic push
-// #   pragma clang diagnostic ignored "-Wexit-time-destructors"
-// #endif
-//     std::wstring winput(L"HellO");
-//     std::string input = converter.to_bytes(winput);
-//     std::wstring prewlabel(L"hello");
-//     std::string prelabel = converter.to_bytes(prewlabel);
-//     std::vector<std::string> label({prelabel});
-// #if (defined __clang__)
-// #   pragma clang diagnostic pop
-// #endif
-//     std::vector<std::string> out = tp.execute(input);
-//     CHECK(out == label);
-// }
+

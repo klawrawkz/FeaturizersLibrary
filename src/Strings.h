@@ -95,6 +95,30 @@ inline void ParseNgramWord(std::string &input,
     }
 }
 
+template <typename IteratorT>
+inline void ParseNgramChar(std::string &input,
+                           size_t const &ngramRangeMin,
+                           size_t const &ngramRangeMax,
+                           std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    std::string trimedString(TrimAndReplace(input.begin(), input.end()));
+
+    if (ngramRangeMin < 1 || ngramRangeMin > ngramRangeMax || ngramRangeMax > trimedString.size())
+        throw std::invalid_argument("ngramRangeMin and ngramRangeMax not valid");
+
+    std::vector<IteratorT> wordIterVector;
+    for (IteratorT strIter = trimedString.begin(); strIter != trimedString.end(); ++strIter)
+        wordIterVector.emplace_back(strIter);
+    wordIterVector.emplace_back(trimedString.end());
+
+    for (size_t strIterOffset = 0; strIterOffset < wordIterVector.size(); ++strIterOffset)  {
+        for (size_t ngramRangeVal = ngramRangeMin; ngramRangeVal <= ngramRangeMax; ++ngramRangeVal) {
+            if (strIterOffset + ngramRangeVal < wordIterVector.size())
+                callback(wordIterVector[strIterOffset], wordIterVector[strIterOffset + ngramRangeVal]);
+        }
+    }
+}
+
 }
 
 template <typename IteratorT>
@@ -200,7 +224,7 @@ template <
     typename IteratorT,
     typename IsDelimiterT
 >
-inline void ParseNgramWordCopy(std::string &input,
+inline void ParseNgramWord(std::string &input,
                            IsDelimiterT const &isDelimiter,
                            size_t const &ngramRangeMin,
                            size_t const &ngramRangeMax,
@@ -214,18 +238,36 @@ template <
     typename IsDelimiterT
 >
 inline void ParseNgramWordCopy(std::string const &input,
-                           IsDelimiterT const &isDelimiter,
+                               IsDelimiterT const &isDelimiter,
+                               size_t const &ngramRangeMin,
+                               size_t const &ngramRangeMax,
+                               std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    //copy string to trim
+    std::string inputCopy(input);
+    Details::ParseNgramWord(inputCopy, isDelimiter, ngramRangeMin, ngramRangeMax, callback);
+}
+
+template <typename IteratorT>
+inline void ParseNgramChar(std::string &input,
                            size_t const &ngramRangeMin,
                            size_t const &ngramRangeMax,
                            std::function<void (IteratorT&, IteratorT&)> const &callback) {
 
-    //copy string to trim
-    std::string inputCopy(input);
-
-    Details::ParseNgramWord(inputCopy, isDelimiter, ngramRangeMin, ngramRangeMax, callback);
+    Details::ParseNgramChar(input, ngramRangeMin, ngramRangeMax, callback);
 }
 
-// inline void ParseNgramChar()
+template <typename IteratorT>
+inline void ParseNgramCharCopy(std::string const &input,
+                               size_t const &ngramRangeMin,
+                               size_t const &ngramRangeMax,
+                               std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    //copy string to trim
+    std::string inputCopy(input);
+    Details::ParseNgramChar(inputCopy, ngramRangeMin, ngramRangeMax, callback);
+}
+
 
 // inline void ParseNgramCharwb()
 
@@ -233,26 +275,6 @@ inline void ParseNgramWordCopy(std::string const &input,
 } // namespace Microsoft
 
 
-// inline std::vector<std::string> NgramParsingWord(std::string const &input, std::uint8_t ngram_range_min, std::uint8_t ngram_range_max) {
-//     if (ngram_range_min < 1 || ngram_range_max < ngram_range_min)
-//         throw std::invalid_argument("invalid ngram range");
-//     std::vector<std::string> ngramDocument;
-//     std::vector<size_t> spaceIdx;
-//     spaceIdx.emplace_back(0);
-//     size_t idx = 0;
-//     for (auto it = input.begin(); it != input.end(); ++it, ++idx) {
-//         if (std::isspace(*it))
-//             spaceIdx.emplace_back(idx + 1);
-//     }
-
-//     //need optimize
-//     for (auto ngramVal = ngram_range_min; ngramVal <= ngram_range_max; ++ngramVal) {
-//         for (size_t wordIdx = 0; wordIdx < spaceIdx.size() - ngramVal; ++wordIdx) {
-//             ngramDocument.emplace_back(input.substr(spaceIdx[wordIdx], spaceIdx[wordIdx + ngramVal] - spaceIdx[wordIdx] - 1));
-//         }
-//     }
-//     return ngramDocument;
-// }
 // inline std::vector<std::string> NgramParsingChar(std::string const &input, std::uint8_t ngram_range_min, std::uint8_t ngram_range_max) {
 //     if (ngram_range_min < 1 || ngram_range_max < ngram_range_min)
 //         throw std::invalid_argument("invalid ngram range");
