@@ -70,6 +70,24 @@ void ParseNgramCharTest(std::string const & input,
     CHECK(output == label);
 }
 
+void ParseNgramCharwbTest(std::string const & input,
+                          std::vector<std::string> const & label,
+                          char const & ch,
+                          size_t ngramRangeMin,
+                          size_t ngramRangeMax) {
+    std::vector<std::string> output;
+    ParseNgramCharwbCopy<std::string::const_iterator, char>(
+        input,
+        ch,
+        ngramRangeMin,
+        ngramRangeMax,
+        [&output] (std::string::const_iterator & iterBegin, std::string::const_iterator & iterEnd) {
+            output.emplace_back(std::string(iterBegin, iterEnd));
+        }
+    );
+    CHECK(output == label);
+}
+
 TEST_CASE("ToLower") {
     std::string input("THIS IS THE FIRST DOCUMENT.");
     std::string label("this is the first document.");
@@ -166,13 +184,11 @@ TEST_CASE("ParseNgramChar") {
     ParseNgramCharTest("jumpy   ?? fox", {"jumpy fox"}, 9, 9);
 }
 
+TEST_CASE("ParseNgramCharwb") {
+    CHECK_THROWS_WITH(ParseNgramCharwbTest(" ", {""}, ' ', 1, 1), "wordIterPairVector.size() == 0");
+    CHECK_THROWS_WITH(ParseNgramCharwbTest("hi", {"hi"}, ' ', 0, 3), "ngramRangeMin and ngramRangeMax not valid");
+    ParseNgramCharwbTest("? jumpy ^fox )", {" jump", "jumpy", "umpy ", " fox "}, ' ', 5, 5);
+    ParseNgramCharwbTest("? jumpy ^fox )", {" jumpy", "jumpy ", " fox "}, ' ', 6, 6);
+}
 
-// TEST_CASE("TextPreprocessorTransformer_ngramscharwb") {
-//     std::vector<std::string> stopwords({});
-//     NS::Featurizers::Components::TextPreprocessorTransformer tp(true, "\\s+", stopwords, "ascii", 5, 5, "char_wb");
-//     std::string input("jumpy fox");
-//     std::vector<std::string> label({" jump", "jumpy", "umpy ", " fox "});
-//     std::vector<std::string> out = tp.execute(input);
-//     CHECK(out == label);
-// }
 
