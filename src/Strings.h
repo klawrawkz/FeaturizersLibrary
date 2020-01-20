@@ -4,11 +4,98 @@
 // ----------------------------------------------------------------------
 #pragma once
 
-#include <algorithm>
-#include <iterator>
-
 namespace Microsoft {
 namespace Featurizer {
+namespace Details {
+
+template <
+    typename IteratorT,
+    typename IsDelimiterT
+>
+inline void Parse(IteratorT const &begin,
+                  IteratorT const &end,
+                  IsDelimiterT const &isDelimiter,
+                  std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    IteratorT left = begin;
+    IteratorT right = left;
+    while (left != end && *left == isDelimiter)
+        ++left;
+
+    right = left;
+    while (right != end) {
+        if (*right == isDelimiter) {
+            callback(left, right);
+            left = right;
+            while (left != end && *left == isDelimiter)
+                ++left;
+            right = left;
+        } else {
+            ++right;
+        }
+    }
+    if (left != right)
+        callback(left, right);
+}
+
+template <
+    typename IteratorT,
+    typename RegexT
+>
+inline void ParseRegex(IteratorT const &begin,
+                       IteratorT const &end,
+                       RegexT const &regexToken,
+                       std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    std::sregex_iterator iter(begin, end, regexToken);
+    std::sregex_iterator iterEnd;
+
+    while (iter != iterEnd) {
+        std::string const iterStringConst = iter->str();
+        IteratorT beginRef = iterStringConst.begin();
+        IteratorT endRef = iterStringConst.end();
+        callback(beginRef, endRef);
+        ++iter;
+    }
+}
+
+template <
+    typename IteratorT,
+    typename IsDelimiterT
+>
+inline void ParseNgramWord(std::string &input,
+                           IsDelimiterT const &isDelimiter,
+                           size_t const &ngramRangeMin,
+                           size_t const &ngramRangeMax,
+                           std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    std::string trimedString(TrimAndReplace(input.begin(), input.end()));
+
+    //wordIterPairVector is used to store the begin and end iterator of words in input
+    std::vector<std::pair<IteratorT, IteratorT>> wordIterPairVector;
+    Details::Parse<IteratorT, IsDelimiterT>(
+        trimedString.begin(),
+        trimedString.end(),
+        isDelimiter,
+        [&wordIterPairVector] (IteratorT &iterBegin, IteratorT &iterEnd) {
+            wordIterPairVector.emplace_back(std::make_pair(iterBegin, iterEnd));
+        }
+    );
+
+    if (wordIterPairVector.size() == 0)
+        throw std::invalid_argument("wordIterPairVector.size() == 0");
+
+    if (ngramRangeMin < 1 || ngramRangeMin > ngramRangeMax || ngramRangeMax > wordIterPairVector.size())
+        throw std::invalid_argument("ngramRangeMin and ngramRangeMax not valid");
+
+    for (size_t ngramRangeVal = ngramRangeMin; ngramRangeVal <= ngramRangeMax; ++ngramRangeVal) {
+        for (size_t pairIdx = 0; pairIdx < wordIterPairVector.size() - ngramRangeVal + 1; ++pairIdx) {
+            callback(wordIterPairVector[pairIdx].first, wordIterPairVector[pairIdx + ngramRangeVal - 1].second);
+        }
+    }
+}
+
+}
 
 template <typename IteratorT>
 inline std::string ToLower(IteratorT begin, IteratorT end) {
@@ -24,7 +111,10 @@ inline std::string ToUpper(IteratorT begin, IteratorT end) {
     return result;
 }
 
-template <typename IteratorT, typename PredicateT>
+template <
+    typename IteratorT,
+    typename PredicateT
+>
 inline std::string TrimLeft(IteratorT begin, IteratorT end, PredicateT isPredicate) {
     while (begin != end) {
         if (*begin == isPredicate)
@@ -35,7 +125,10 @@ inline std::string TrimLeft(IteratorT begin, IteratorT end, PredicateT isPredica
     return std::string(begin, end);
 }
 
-template <typename IteratorT, typename PredicateT>
+template <
+    typename IteratorT,
+    typename PredicateT
+>
 inline std::string TrimRight(IteratorT begin, IteratorT end, PredicateT isPredicate) {
     IteratorT offset = begin;
     IteratorT iter = begin;
@@ -47,72 +140,98 @@ inline std::string TrimRight(IteratorT begin, IteratorT end, PredicateT isPredic
     return std::string(begin, offset + 1);
 }
 
-template <typename IteratorT, typename PredicateT>
+template <
+    typename IteratorT,
+    typename PredicateT
+>
 inline std::string Trim(IteratorT begin, IteratorT end, PredicateT isPredicate) {
     std::string stringAfterTrimedLeft(TrimLeft(begin, end, isPredicate));
     return TrimRight(stringAfterTrimedLeft.begin(), stringAfterTrimedLeft.end(), isPredicate);
 }
 
-template <typename IteratorT, typename IsDelimiterT>
-inline void Parse(std::string const &input, IsDelimiterT const &isDelimiter, std::function<void (IteratorT&, IteratorT&)> const &callback) {
-    IteratorT left = input.begin();
-    IteratorT right = left;
-    while (left != input.end() && *left == isDelimiter)
-        ++left;
+template <typename IteratorT>
+inline std::string TrimAndReplace(IteratorT begin, IteratorT end) {
+    //replace all punctuations with spaces
+    std::transform(begin, end, begin, [](char c) {
+        if (std::ispunct(c) )
+            return ' ';
+        return c;
+    });
 
-    right = left;
-    while (right != input.end()) {
-        if (*right == isDelimiter) {
-            callback(left, right);
-            left = right;
-            while (left != input.end() && *left == isDelimiter)
-                ++left;
-            right = left;
-        } else {
-            ++right;
-        }
-    }
-    if (left != right)
-        callback(left, right);
+    std::string result(begin, end);
+    //remove duplicate space
+    result.erase(
+        std::unique(
+            result.begin(),
+            result.end(),
+            [=](char lhs, char rhs){
+                return (lhs == rhs) && (lhs == ' ');
+            }
+        ),
+        result.end()
+    );
+
+    return result;
 }
 
-template <typename IteratorT, typename RegexT>
-inline void ParseRegex(std::string const &input, RegexT const &regexToken, std::function<void (IteratorT, IteratorT)> const &callback) {
-    std::sregex_iterator iter(input.begin(), input.end(), regexToken);
-    std::sregex_iterator end;
+template <
+    typename IteratorT,
+    typename IsDelimiterT
+>
+inline void Parse(std::string const &input,
+                  IsDelimiterT const &isDelimiter,
+                  std::function<void (IteratorT&, IteratorT&)> const &callback) {
 
-    while (iter != end) {
-        std::string const iterStringConst = iter->str();
-        callback(iterStringConst.begin(), iterStringConst.end());
-        ++iter;
-    }
+    Details::Parse(input.begin(), input.end(), isDelimiter, callback);
 }
+
+template <
+    typename IteratorT,
+    typename RegexT
+>
+inline void ParseRegex(std::string const &input,
+                       RegexT const &regexToken,
+                       std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    Details::ParseRegex(input.begin(), input.end(), regexToken, callback);
+}
+
+template <
+    typename IteratorT,
+    typename IsDelimiterT
+>
+inline void ParseNgramWordCopy(std::string &input,
+                           IsDelimiterT const &isDelimiter,
+                           size_t const &ngramRangeMin,
+                           size_t const &ngramRangeMax,
+                           std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    Details::ParseNgramWord(input, isDelimiter, ngramRangeMin, ngramRangeMax, callback);
+}
+
+template <
+    typename IteratorT,
+    typename IsDelimiterT
+>
+inline void ParseNgramWordCopy(std::string const &input,
+                           IsDelimiterT const &isDelimiter,
+                           size_t const &ngramRangeMin,
+                           size_t const &ngramRangeMax,
+                           std::function<void (IteratorT&, IteratorT&)> const &callback) {
+
+    //copy string to trim
+    std::string inputCopy(input);
+
+    Details::ParseNgramWord(inputCopy, isDelimiter, ngramRangeMin, ngramRangeMax, callback);
+}
+
+// inline void ParseNgramChar()
+
+// inline void ParseNgramCharwb()
 
 } // namespace Featurizer
 } // namespace Microsoft
 
-
-// inline void Trim(std::string& input) {
-//     //replace all punctuations with spaces
-//     std::transform(input.begin(), input.end(), input.begin(), [](char c) {
-//         if (std::ispunct(c) )
-//             return ' ';
-//         return c;
-//     });
-//     //remove duplicate whitespace
-//     bool prev_is_space = true;
-//     input.erase(std::remove_if(input.begin(), input.end(), [&prev_is_space](unsigned char curr) {
-//         bool r = std::isspace(curr) && prev_is_space;
-//         prev_is_space = std::isspace(curr);
-//         return r;
-//     }), input.end());
-// }
-// #if (defined _MSC_VER)
-// #   pragma warning(pop)
-// #endif
-// inline void RemoveWhiteSpace(std::string& input) {
-//     input.erase(std::remove_if(input.begin(), input.end(), ::isspace), input.end());
-// }
 
 // inline std::vector<std::string> NgramParsingWord(std::string const &input, std::uint8_t ngram_range_min, std::uint8_t ngram_range_max) {
 //     if (ngram_range_min < 1 || ngram_range_max < ngram_range_min)
