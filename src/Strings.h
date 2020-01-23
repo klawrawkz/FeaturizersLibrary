@@ -166,9 +166,7 @@ inline void ParseNgramWord(std::string &input,
 
     for (size_t ngramRangeVal = ngramRangeMin; ngramRangeVal <= ngramRangeMax; ++ngramRangeVal) {
         for (size_t pairIdx = 0; pairIdx < wordIterPairVector.size() - ngramRangeVal + 1; ++pairIdx) {
-            IteratorT begin = wordIterPairVector[pairIdx].first;
-            IteratorT end = wordIterPairVector[pairIdx + ngramRangeVal - 1].second;
-            callback(begin, end);
+            callback(wordIterPairVector[pairIdx].first, wordIterPairVector[pairIdx + ngramRangeVal - 1].second);
         }
     }
 }

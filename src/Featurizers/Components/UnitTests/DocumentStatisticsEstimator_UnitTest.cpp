@@ -112,18 +112,103 @@ TEST_CASE("invalid_trainingpolicy") {
     CHECK_THROWS_WITH(NS::Featurizers::Components::Details::DocumentStatisticsTrainingOnlyPolicy(decorator, analyzer, regexToken, existingVocabulary, maxFeatures, 0.0f, 1.0f, 2, 1), "_ngramRangeMin > _ngramRangeMax");
 }
 
-// TEST_CASE("string_idf") {
-//     FrequencyMap const                         termFreqLabel({{"orange",3}, {"apple", 1}, {"peach", 3}, {"grape", 2}, {"banana",1}});
-//     IndexMap const                             termIndexLabel({{"apple", 0}, {"banana",1}, {"grape", 2}, {"orange",3}, {"peach", 4}});
+TEST_CASE("string_idf") {
+    FrequencyMap const                         termFreqLabel({{"orange",3}, {"apple", 1}, {"peach", 3}, {"grape", 2}, {"banana",1}});
+    IndexMap const                             termIndexLabel({{"apple", 0}, {"banana",1}, {"grape", 2}, {"orange",3}, {"peach", 4}});
+    FrequencyAndIndexMap const                 termFreqAndIndexLabel = NS::Featurizers::Components::MergeTwoMapsWithSameKeys(termFreqLabel, termIndexLabel);
+    std::uint32_t const                        docuNumsLabel(3);
+
+    std::vector<std::vector<std::string>> const
+                                               inputBatches({{" orange  apple  apple peach  grape "},
+                                                            {" grape orange     peach peach banana"},
+                                                            {"orange orange peach   peach orange "}});
+    //parameter initialization
+    StringDecorator decorator;
+    AnalyzerMethod analyzer = AnalyzerMethod::WORD;
+    std::string regexToken = "";
+    nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
+    nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>();
+    std::float_t minDf = 0.0f;
+    std::float_t maxDf = 1.0f;
+    std::uint32_t ngramRangeMin = 1;
+    std::uint32_t ngramRangeMax = 1;
+
+    FrequencyAndIndexMap const                 termFreqAndIndexAnnotation(TrainTermFrequencyAndIndex(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
+    std::uint32_t const                        docuNumsAnnotation(TrainDocuNum(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
+
+    CHECK(termFreqAndIndexAnnotation == termFreqAndIndexLabel);
+    CHECK(docuNumsAnnotation == docuNumsLabel);
+}
+
+TEST_CASE("string_idf_custom_decorator") {
+    FrequencyMap const                         termFreqLabel({{"orange",3}, {"apple", 1}, {"peach", 3}, {"grape", 2}, {"banana",1}});
+    IndexMap const                             termIndexLabel({{"apple", 0}, {"banana",1}, {"grape", 2}, {"orange",3}, {"peach", 4}});
+    FrequencyAndIndexMap const                 termFreqAndIndexLabel = NS::Featurizers::Components::MergeTwoMapsWithSameKeys(termFreqLabel, termIndexLabel);
+    std::uint32_t const                        docuNumsLabel(3);
+
+    std::vector<std::vector<std::string>> const
+                                               inputBatches({{" ORANGE  APPLE  apple peach  grape "},
+                                                            {" grape orange     peach PEACH BANANA"},
+                                                            {"orange ORANGE peach   peach orange "}});
+    //parameter initialization
+    StringDecorator decorator = Microsoft::Featurizer::ToLower;
+    AnalyzerMethod analyzer = AnalyzerMethod::WORD;
+    std::string regexToken = "";
+    nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
+    nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>();
+    std::float_t minDf = 0.0f;
+    std::float_t maxDf = 1.0f;
+    std::uint32_t ngramRangeMin = 1;
+    std::uint32_t ngramRangeMax = 1;
+
+    FrequencyAndIndexMap const                 termFreqAndIndexAnnotation(TrainTermFrequencyAndIndex(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
+    std::uint32_t const                        docuNumsAnnotation(TrainDocuNum(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
+
+    CHECK(termFreqAndIndexAnnotation == termFreqAndIndexLabel);
+    CHECK(docuNumsAnnotation == docuNumsLabel);
+}
+
+TEST_CASE("string_idf_custom_regex") {
+    FrequencyMap const                         termFreqLabel({{"orange",3}, {"apple", 1}, {"peach", 3}, {"grape", 2}, {"banana",1}});
+    IndexMap const                             termIndexLabel({{"apple", 0}, {"banana",1}, {"grape", 2}, {"orange",3}, {"peach", 4}});
+    FrequencyAndIndexMap const                 termFreqAndIndexLabel = NS::Featurizers::Components::MergeTwoMapsWithSameKeys(termFreqLabel, termIndexLabel);
+    std::uint32_t const                        docuNumsLabel(3);
+
+    std::vector<std::vector<std::string>> const
+                                               inputBatches({{" ORANGE  APPLE  apple peach  grape "},
+                                                            {" grape orange     peach PEACH BANANA"},
+                                                            {"orange ORANGE peach   peach orange "}});
+    //parameter initialization
+    StringDecorator decorator = Microsoft::Featurizer::ToLower;
+    AnalyzerMethod analyzer = AnalyzerMethod::WORD;
+    std::string regexToken = "[^\\s]+";
+    nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
+    nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>();
+    std::float_t minDf = 0.0f;
+    std::float_t maxDf = 1.0f;
+    std::uint32_t ngramRangeMin = 1;
+    std::uint32_t ngramRangeMax = 1;
+
+    FrequencyAndIndexMap const                 termFreqAndIndexAnnotation(TrainTermFrequencyAndIndex(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
+    std::uint32_t const                        docuNumsAnnotation(TrainDocuNum(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
+
+    CHECK(termFreqAndIndexAnnotation == termFreqAndIndexLabel);
+    CHECK(docuNumsAnnotation == docuNumsLabel);
+}
+
+//problematic test(dangling iterators)
+// TEST_CASE("string_idf_ngramword") {
+//     FrequencyMap const                         termFreqLabel({{"jumpy", 1}, {"fox", 1}, {"jumpy fox", 1}});
+//     IndexMap const                             termIndexLabel({{"fox", 0}, {"jumpy fox", 2}, {"jumpy", 1}});
 //     FrequencyAndIndexMap const                 termFreqAndIndexLabel = NS::Featurizers::Components::MergeTwoMapsWithSameKeys(termFreqLabel, termIndexLabel);
-//     std::uint32_t const                        docuNumsLabel(3);
+//     std::uint32_t const                        docuNumsLabel(1);
 
 //     std::vector<std::vector<std::string>> const
-//                                                inputBatches({{" orange  apple  apple peach  grape "},
-//                                                             {" grape orange     peach peach banana"},
-//                                                             {"orange orange peach   peach orange "}});
+//                                                inputBatches({{"jumpy fox"}});
+
 //     //parameter initialization
-//     StringDecorator decorator;
+//     StringDecorator decorator = Microsoft::Featurizer::ToLower;
+//     //StringDecorator decorator;
 //     AnalyzerMethod analyzer = AnalyzerMethod::WORD;
 //     std::string regexToken = "";
 //     nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
@@ -131,63 +216,7 @@ TEST_CASE("invalid_trainingpolicy") {
 //     std::float_t minDf = 0.0f;
 //     std::float_t maxDf = 1.0f;
 //     std::uint32_t ngramRangeMin = 1;
-//     std::uint32_t ngramRangeMax = 1;
-
-//     FrequencyAndIndexMap const                 termFreqAndIndexAnnotation(TrainTermFrequencyAndIndex(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
-//     std::uint32_t const                        docuNumsAnnotation(TrainDocuNum(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
-
-//     CHECK(termFreqAndIndexAnnotation == termFreqAndIndexLabel);
-//     CHECK(docuNumsAnnotation == docuNumsLabel);
-// }
-
-// TEST_CASE("string_idf_custom_decorator") {
-//     FrequencyMap const                         termFreqLabel({{"orange",3}, {"apple", 1}, {"peach", 3}, {"grape", 2}, {"banana",1}});
-//     IndexMap const                             termIndexLabel({{"apple", 0}, {"banana",1}, {"grape", 2}, {"orange",3}, {"peach", 4}});
-//     FrequencyAndIndexMap const                 termFreqAndIndexLabel = NS::Featurizers::Components::MergeTwoMapsWithSameKeys(termFreqLabel, termIndexLabel);
-//     std::uint32_t const                        docuNumsLabel(3);
-
-//     std::vector<std::vector<std::string>> const
-//                                                inputBatches({{" ORANGE  APPLE  apple peach  grape "},
-//                                                             {" grape orange     peach PEACH BANANA"},
-//                                                             {"orange ORANGE peach   peach orange "}});
-//     //parameter initialization
-//     StringDecorator decorator = Microsoft::Featurizer::ToLower;
-//     AnalyzerMethod analyzer = AnalyzerMethod::WORD;
-//     std::string regexToken = "";
-//     nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
-//     nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>();
-//     std::float_t minDf = 0.0f;
-//     std::float_t maxDf = 1.0f;
-//     std::uint32_t ngramRangeMin = 1;
-//     std::uint32_t ngramRangeMax = 1;
-
-//     FrequencyAndIndexMap const                 termFreqAndIndexAnnotation(TrainTermFrequencyAndIndex(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
-//     std::uint32_t const                        docuNumsAnnotation(TrainDocuNum(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
-
-//     CHECK(termFreqAndIndexAnnotation == termFreqAndIndexLabel);
-//     CHECK(docuNumsAnnotation == docuNumsLabel);
-// }
-
-// TEST_CASE("string_idf_custom_regex") {
-//     FrequencyMap const                         termFreqLabel({{"orange",3}, {"apple", 1}, {"peach", 3}, {"grape", 2}, {"banana",1}});
-//     IndexMap const                             termIndexLabel({{"apple", 0}, {"banana",1}, {"grape", 2}, {"orange",3}, {"peach", 4}});
-//     FrequencyAndIndexMap const                 termFreqAndIndexLabel = NS::Featurizers::Components::MergeTwoMapsWithSameKeys(termFreqLabel, termIndexLabel);
-//     std::uint32_t const                        docuNumsLabel(3);
-
-//     std::vector<std::vector<std::string>> const
-//                                                inputBatches({{" ORANGE  APPLE  apple peach  grape "},
-//                                                             {" grape orange     peach PEACH BANANA"},
-//                                                             {"orange ORANGE peach   peach orange "}});
-//     //parameter initialization
-//     StringDecorator decorator = Microsoft::Featurizer::ToLower;
-//     AnalyzerMethod analyzer = AnalyzerMethod::WORD;
-//     std::string regexToken = "[^\\s]+";
-//     nonstd::optional<IndexMap> existingVocabulary = nonstd::optional<IndexMap>();
-//     nonstd::optional<std::uint32_t> maxFeatures = nonstd::optional<std::uint32_t>();
-//     std::float_t minDf = 0.0f;
-//     std::float_t maxDf = 1.0f;
-//     std::uint32_t ngramRangeMin = 1;
-//     std::uint32_t ngramRangeMax = 1;
+//     std::uint32_t ngramRangeMax = 2;
 
 //     FrequencyAndIndexMap const                 termFreqAndIndexAnnotation(TrainTermFrequencyAndIndex(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));
 //     std::uint32_t const                        docuNumsAnnotation(TrainDocuNum(inputBatches, decorator, analyzer, regexToken, existingVocabulary, maxFeatures, minDf, maxDf, ngramRangeMin, ngramRangeMax));

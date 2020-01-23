@@ -553,7 +553,7 @@ inline void Details::DocumentStatisticsTrainingOnlyPolicy::fit(InputType const &
 
         fit_impl<InputTypeConstIteratorRangeSet>(
             input,
-            [](InputTypeConstIterator begin, InputTypeConstIterator end) {
+            [](InputTypeConstIterator & begin, InputTypeConstIterator & end) {
                 return std::make_pair(begin, end);
             },
             [](InputTypeConstIteratorRange const &range) -> std::string {
