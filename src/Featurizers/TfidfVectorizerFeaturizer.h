@@ -5,7 +5,7 @@
 #pragma once
 
 #include "Components/PipelineExecutionEstimatorImpl.h"
-#include "Components/InverseDocumentFrequencyEstimator.h"
+#include "Components/DocumentStatisticsEstimator.h"
 #include "../Traits.h"
 #include "Structs.h"
 
@@ -17,16 +17,16 @@ namespace Featurizers {
 
 /////////////////////////////////////////////////////////////////////////
 ///  \class         TfidfVectorizerTransformer
-///  \brief         Returns a unique TFIDFStruct for each input.
+///  \brief         Returns a unique SingleValueSparseVectorEncoding<std::float_t> for each input.
 ///
-class TfidfVectorizerTransformer : public StandardTransformer<std::string, TFIDFStruct> {
+class TfidfVectorizerTransformer : public StandardTransformer<std::string, SingleValueSparseVectorEncoding<std::float_t>> {
 public:
     // ----------------------------------------------------------------------
     // |
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using BaseType                           = StandardTransformer<std::string, TFIDFStruct>;
+    using BaseType                           = StandardTransformer<std::string, SingleValueSparseVectorEncoding<std::float_t>>;
     using IndexMapType                       = std::unordered_map<std::string, std::uint32_t>;
     using IterRangeType                      = std::tuple<std::string::const_iterator, std::string::const_iterator>;
 
@@ -50,7 +50,7 @@ public:
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    TfidfVectorizerTransformer(IndexMapType labels, IndexMapType docufreq, std::uint32_t totalnumdocus, bool binary, 
+    TfidfVectorizerTransformer(IndexMapType labels, IndexMapType docufreq, std::uint32_t totalnumdocus, bool binary,
                                std::string norm, bool use_idf, bool smooth_idf, bool sublinear_tf);
     TfidfVectorizerTransformer(Archive &ar);
 
@@ -73,12 +73,12 @@ private:
         typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp> TermFreqMap;
 
         //todo: will use vector<functor> after string header file is done
-        Components::split_temp( 
-            input, 
+        Components::split_temp(
+            input,
             [&TermFreqMap] (std::string::const_iterator & iter_start, std::string::const_iterator & iter_end) {
-                
+
                 typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>::iterator iter_tf(TermFreqMap.find(std::make_tuple(iter_start, iter_end)));
-                
+
                 if (iter_tf != TermFreqMap.end()) {
                     ++iter_tf->second;
                 } else {
@@ -95,7 +95,7 @@ private:
             typename IndexMapType::const_iterator const      iter_label(Labels.find(word));
 
             if (iter_label != Labels.end()) {
-                
+
                 std::float_t tf;
                 std::float_t idf;
 
@@ -135,12 +135,12 @@ private:
         // l2-norm calibration
         if (Norm == "l2") {
             normVal = sqrt(normVal);
-        }   
+        }
 
         for (auto & result : results) {
-            callback(TFIDFStruct(std::get<0>(result), std::get<1>(result) / normVal));
-        }    
-    }                                                                                  
+            callback(SingleValueSparseVectorEncoding<std::float_t>(Labels.size(), std::get<1>(result) / normVal, std::get<0>(result)));
+        }
+    }
 
 };
 
@@ -148,19 +148,19 @@ namespace Details {
 
 /////////////////////////////////////////////////////////////////////////
 ///  \class         TfidfVectorizerEstimatorImpl
-///  \brief         Estimator that uses the output of the 
-///                 InverseDocumentFrequencyEstimator to provide useful
+///  \brief         Estimator that uses the output of the
+///                 DocumentStatisticsEstimator to provide useful
 ///                 information which helps calculation of TfidfVectorizer
 ///
 template <size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()>
-class TfidfVectorizerEstimatorImpl : public TransformerEstimator<std::string, TFIDFStruct> {
+class TfidfVectorizerEstimatorImpl : public TransformerEstimator<std::string, SingleValueSparseVectorEncoding<std::float_t>> {
 public:
     // ----------------------------------------------------------------------
     // |
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using BaseType                          = TransformerEstimator<std::string, TFIDFStruct>;
+    using BaseType                          = TransformerEstimator<std::string, SingleValueSparseVectorEncoding<std::float_t>>;
     using TransformerType                   = TfidfVectorizerTransformer;
     using IndexMapType                      = TfidfVectorizerTransformer::IndexMapType;
     // ----------------------------------------------------------------------
@@ -168,8 +168,8 @@ public:
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    TfidfVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, 
-                                 std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary, std::string norm, 
+    TfidfVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df,
+                                 std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary, std::string norm,
                                  bool use_idf, bool smooth_idf, bool sublinear_tf);
     ~TfidfVectorizerEstimatorImpl(void) override = default;
 
@@ -182,7 +182,7 @@ private:
     // |
     // ----------------------------------------------------------------------
     size_t const                             _colIndex;
-    
+
     std::float_t const                       _max_df;
     std::float_t const                       _min_df;
     std::uint32_t const                      _max_features;
@@ -210,18 +210,18 @@ private:
 
     // MSVC has problems when the declaration and definition are separated
     typename BaseType::TransformerUniquePtr create_transformer_impl(void) override {
-       
-        using InverseDocumentFrequencyEstimator = Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>;
 
-        Components::InverseDocumentFrequencyAnnotationData const &      data(InverseDocumentFrequencyEstimator::get_annotation_data(BaseType::get_column_annotations(), _colIndex, Components::InverseDocumentFrequencyEstimatorName));
-        typename Components::InverseDocumentFrequencyAnnotationData::InverseDocumentFrequency const & 
+        using DocumentStatisticsEstimator = Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>;
+
+        Components::DocumentStatisticsAnnotationData const &      data(DocumentStatisticsEstimator::get_annotation_data(BaseType::get_column_annotations(), _colIndex, Components::DocumentStatisticsEstimatorName));
+        typename Components::DocumentStatisticsAnnotationData::FrequencyMap const &
                                                                         docuApperance(data.TermFrequency);
         std::uint32_t const                                             totalNumDocus(data.TotalNumDocuments);
 
-        if (!_vocabulary.empty()) 
+        if (!_vocabulary.empty())
             return std::make_unique<TfidfVectorizerTransformer>(_vocabulary, docuApperance, totalNumDocus, _binary,
                                                                 _norm, _use_idf, _smooth_idf, _sublinear_tf);
-                   
+
         typename TfidfVectorizerTransformer::IndexMapType indexMap;
         typename TfidfVectorizerTransformer::IndexMapType docusFreq;
 
@@ -248,7 +248,7 @@ private:
 template <size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()>
 class TfidfVectorizerEstimator :
     public Components::PipelineExecutionEstimatorImpl<
-        Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>,
+        Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>,
         Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>
     > {
 public:
@@ -259,7 +259,7 @@ public:
     // ----------------------------------------------------------------------
     using BaseType =
         Components::PipelineExecutionEstimatorImpl<
-            Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>,
+            Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>,
             Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>
         >;
 
@@ -270,7 +270,7 @@ public:
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    TfidfVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df, 
+    TfidfVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df,
                              std::uint32_t max_features, IndexMapType vocabulary, bool binary, std::string norm, bool use_idf, bool smooth_idf, bool sublinear_tf);
     ~TfidfVectorizerEstimator(void) override = default;
 
@@ -292,7 +292,7 @@ public:
 // |  TfidfVectorizerTransformer
 // |
 // ----------------------------------------------------------------------
-TfidfVectorizerTransformer::TfidfVectorizerTransformer(IndexMapType labels, IndexMapType docufreq, std::uint32_t totalnumdocus, 
+TfidfVectorizerTransformer::TfidfVectorizerTransformer(IndexMapType labels, IndexMapType docufreq, std::uint32_t totalnumdocus,
                                                        bool binary, std::string norm, bool use_idf, bool smooth_idf, bool sublinear_tf) :
     Labels(
         std::move(
@@ -315,7 +315,7 @@ TfidfVectorizerTransformer::TfidfVectorizerTransformer(IndexMapType labels, Inde
         )
     ),
     TotalNumsDocuments(std::move(totalnumdocus)),
-    Binary(std::move(binary)), 
+    Binary(std::move(binary)),
     Norm(std::move(norm)),
     UseIdf(std::move(use_idf)),
     SmoothIdf(std::move(smooth_idf)),
@@ -327,9 +327,9 @@ TfidfVectorizerTransformer::TfidfVectorizerTransformer(Archive &ar) :
     // TODO: Documentfreq(Traits<decltype(Documentfreq)>::deserialize(ar)),
     TotalNumsDocuments(Traits<decltype(TotalNumsDocuments)>::deserialize(ar)),
     Binary(Traits<decltype(Binary)>::deserialize(ar)),
-    Norm(Traits<decltype(Norm)>::deserialize(ar)), 
-    UseIdf(Traits<decltype(UseIdf)>::deserialize(ar)), 
-    SmoothIdf(Traits<decltype(SmoothIdf)>::deserialize(ar)), 
+    Norm(Traits<decltype(Norm)>::deserialize(ar)),
+    UseIdf(Traits<decltype(UseIdf)>::deserialize(ar)),
+    SmoothIdf(Traits<decltype(SmoothIdf)>::deserialize(ar)),
     SublinearTf(Traits<decltype(SublinearTf)>::deserialize(ar)) {
 }
 
@@ -362,26 +362,26 @@ bool TfidfVectorizerTransformer::operator==(TfidfVectorizerTransformer const &ot
 // ----------------------------------------------------------------------
 
 template <size_t MaxNumTrainingItemsV>
-TfidfVectorizerEstimator<MaxNumTrainingItemsV>::TfidfVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df, 
+TfidfVectorizerEstimator<MaxNumTrainingItemsV>::TfidfVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df,
                                                                          std::uint32_t max_features, IndexMapType vocabulary, bool binary, std::string norm, bool use_idf, bool smooth_idf, bool sublinear_tf) :
     BaseType(
         "TfidfVectorizerEstimator",
         pAllColumnAnnotations,
-        [pAllColumnAnnotations, colIndex](void) { return Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>(std::move(pAllColumnAnnotations), std::move(colIndex)); },
-        [pAllColumnAnnotations, colIndex, &max_df, &min_df, &max_features, &vocabulary, &binary, &norm, &use_idf, &smooth_idf, &sublinear_tf](void) { 
+        [pAllColumnAnnotations, colIndex](void) { return Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>(std::move(pAllColumnAnnotations), std::move(colIndex)); },
+        [pAllColumnAnnotations, colIndex, &max_df, &min_df, &max_features, &vocabulary, &binary, &norm, &use_idf, &smooth_idf, &sublinear_tf](void) {
             return Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>(
-                std::move(pAllColumnAnnotations), 
-                std::move(colIndex), 
-                std::move(max_df), 
-                std::move(min_df), 
-                std::move(max_features), 
+                std::move(pAllColumnAnnotations),
+                std::move(colIndex),
+                std::move(max_df),
+                std::move(min_df),
+                std::move(max_features),
                 std::move(vocabulary),
                 std::move(binary),
                 std::move(norm),
                 std::move(use_idf),
                 std::move(smooth_idf),
                 std::move(sublinear_tf)
-            ); 
+            );
         }
     ) {
 }
@@ -392,8 +392,8 @@ TfidfVectorizerEstimator<MaxNumTrainingItemsV>::TfidfVectorizerEstimator(Annotat
 // |
 // ----------------------------------------------------------------------
 template <size_t MaxNumTrainingItemsV>
-Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>::TfidfVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, 
-                                                                                          std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary, std::string norm, 
+Details::TfidfVectorizerEstimatorImpl<MaxNumTrainingItemsV>::TfidfVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df,
+                                                                                          std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary, std::string norm,
                                                                                           bool use_idf, bool smooth_idf, bool sublinear_tf) :
     BaseType("TfidfVectorizerEstimatorImpl", std::move(pAllColumnAnnotations)),
     _colIndex(

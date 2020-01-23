@@ -5,7 +5,7 @@
 #pragma once
 
 #include "Components/PipelineExecutionEstimatorImpl.h"
-#include "Components/InverseDocumentFrequencyEstimator.h"
+#include "Components/DocumentStatisticsEstimator.h"
 #include "../Traits.h"
 #include "Structs.h"
 
@@ -15,16 +15,16 @@ namespace Featurizers {
 
 /////////////////////////////////////////////////////////////////////////
 ///  \class         CountVectorizerTransformer
-///  \brief         Returns TFStruct for each unique input
+///  \brief         Returns SingleValueSparseVectorEncoding<std::uint32_t> for each unique input
 ///
-class CountVectorizerTransformer : public StandardTransformer<std::string, TFStruct> {
+class CountVectorizerTransformer : public StandardTransformer<std::string, SingleValueSparseVectorEncoding<std::uint32_t>> {
 public:
     // ----------------------------------------------------------------------
     // |
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using BaseType                           = StandardTransformer<std::string, TFStruct>;
+    using BaseType                           = StandardTransformer<std::string, SingleValueSparseVectorEncoding<std::uint32_t>>;
     using IndexMapType                       = std::unordered_map<std::string, std::uint32_t>;
     using IterRangeType                      = std::tuple<std::string::const_iterator, std::string::const_iterator>;
 
@@ -65,12 +65,12 @@ private:
         ApperanceMapType apperanceMap;
 
         //todo: will use vector<functor> after string header file is done
-        Components::split_temp( 
-            input, 
+        Components::split_temp(
+            input,
             [&apperanceMap] (std::string::const_iterator & iter_start, std::string::const_iterator & iter_end) {
-                
+
                 ApperanceMapType::iterator iter_apperance(apperanceMap.find(std::make_tuple(iter_start, iter_end)));
-                
+
                 if (iter_apperance != apperanceMap.end()) {
                     ++iter_apperance->second;
                 } else {
@@ -78,21 +78,21 @@ private:
                 }
             }
         );
-
         for (auto const & pair : apperanceMap) {
             std::string const word = std::string(std::get<0>(pair.first), std::get<1>(pair.first));
 
             typename IndexMapType::const_iterator const      iter_label(Labels.find(word));
 
+            // SingleValueSparseVectorEncoding(total number of categories, appearances, category index)
             if (iter_label != Labels.end()) {
                 if (Binary) {
-                    callback(TFStruct(static_cast<std::uint32_t>(iter_label->second), static_cast<std::uint32_t>(1)));
+                    callback(SingleValueSparseVectorEncoding<std::uint32_t>(Labels.size(), static_cast<std::uint32_t>(1), static_cast<std::uint32_t>(iter_label->second)));
                 } else {
-                    callback(TFStruct(static_cast<std::uint32_t>(iter_label->second), static_cast<std::uint32_t>(pair.second)));
+                    callback(SingleValueSparseVectorEncoding<std::uint32_t>(Labels.size(), static_cast<std::uint32_t>(pair.second), static_cast<std::uint32_t>(iter_label->second)));
                 }
             }
         }
-                                                                                                         
+
     }
 };
 
@@ -100,18 +100,18 @@ namespace Details {
 
 /////////////////////////////////////////////////////////////////////////
 ///  \class         CountVectorizerEstimatorImpl
-///  \brief         Estimator that uses the output of the 
-///                 InverseDocumentFrequencyEstimator to provide useful
+///  \brief         Estimator that uses the output of the
+///                 DocumentStatisticsEstimator to provide useful
 ///                 information which helps calculation of CountVectorizer
 template <size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()>
-class CountVectorizerEstimatorImpl : public TransformerEstimator<std::string, TFStruct> {
+class CountVectorizerEstimatorImpl : public TransformerEstimator<std::string, SingleValueSparseVectorEncoding<std::uint32_t>> {
 public:
     // ----------------------------------------------------------------------
     // |
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using BaseType                          = TransformerEstimator<std::string, TFStruct>;
+    using BaseType                          = TransformerEstimator<std::string, SingleValueSparseVectorEncoding<std::uint32_t>>;
     using TransformerType                   = CountVectorizerTransformer;
     using IndexMapType                      = CountVectorizerTransformer::IndexMapType;
 
@@ -120,7 +120,7 @@ public:
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    CountVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, 
+    CountVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df,
                                  std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary);
     ~CountVectorizerEstimatorImpl(void) override = default;
 
@@ -133,7 +133,7 @@ private:
     // |
     // ----------------------------------------------------------------------
     size_t const                             _colIndex;
-    
+
     std::float_t const                       _max_df;
     std::float_t const                       _min_df;
     std::uint32_t const                      _max_features;
@@ -156,16 +156,16 @@ private:
 
     // MSVC has problems when the declaration and definition are separated
     typename BaseType::TransformerUniquePtr create_transformer_impl(void) override {
-       
-        using InverseDocumentFrequencyEstimator = Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>;
 
-        Components::InverseDocumentFrequencyAnnotationData const &      data(InverseDocumentFrequencyEstimator::get_annotation_data(BaseType::get_column_annotations(), _colIndex, Components::InverseDocumentFrequencyEstimatorName));
+        using DocumentStatisticsEstimator = Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>;
 
-        typename Components::InverseDocumentFrequencyAnnotationData::InverseDocumentFrequency const & 
+        Components::DocumentStatisticsAnnotationData const &      data(DocumentStatisticsEstimator::get_annotation_data(BaseType::get_column_annotations(), _colIndex, Components::DocumentStatisticsEstimatorName));
+
+        typename Components::DocumentStatisticsAnnotationData::FrequencyMap const &
                                                             docuApperance(data.TermFrequency);
 
         std::uint32_t const                                 totalNumDocus(data.TotalNumDocuments);
-                   
+
         typename CountVectorizerTransformer::IndexMapType indexMap;
 
         if (!_vocabulary.empty()) {
@@ -175,7 +175,7 @@ private:
         for (auto const & pair : docuApperance) {
             std::float_t const freq = pair.second / static_cast<std::float_t>(totalNumDocus);
 
-            if (freq >= _min_df && freq <= _max_df) 
+            if (freq >= _min_df && freq <= _max_df)
                 indexMap.insert(std::make_pair(pair.first, indexMap.size()));
         }
 
@@ -192,7 +192,7 @@ private:
 template <size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()>
 class CountVectorizerEstimator :
     public Components::PipelineExecutionEstimatorImpl<
-        Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>,
+        Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>,
         Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>
     > {
 public:
@@ -203,7 +203,7 @@ public:
     // ----------------------------------------------------------------------
     using BaseType =
         Components::PipelineExecutionEstimatorImpl<
-            Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>,
+            Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>,
             Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>
         >;
 
@@ -272,17 +272,17 @@ CountVectorizerEstimator<MaxNumTrainingItemsV>::CountVectorizerEstimator(Annotat
     BaseType(
         "CountVectorizerEstimator",
         pAllColumnAnnotations,
-        [pAllColumnAnnotations, colIndex](void) { return Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>(std::move(pAllColumnAnnotations), std::move(colIndex)); },
-        [pAllColumnAnnotations, colIndex, &max_df, &min_df, &max_features, &vocabulary, &binary](void) { 
+        [pAllColumnAnnotations, colIndex](void) { return Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>(std::move(pAllColumnAnnotations), std::move(colIndex)); },
+        [pAllColumnAnnotations, colIndex, &max_df, &min_df, &max_features, &vocabulary, &binary](void) {
             return Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>(
-                std::move(pAllColumnAnnotations), 
-                std::move(colIndex), 
-                std::move(max_df), 
-                std::move(min_df), 
-                std::move(max_features), 
+                std::move(pAllColumnAnnotations),
+                std::move(colIndex),
+                std::move(max_df),
+                std::move(min_df),
+                std::move(max_features),
                 std::move(vocabulary),
                 std::move(binary)
-            ); 
+            );
         }
     ) {
 }
