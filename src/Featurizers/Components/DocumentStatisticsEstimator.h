@@ -21,38 +21,6 @@ namespace Components {
 
 namespace {
 
-//this is temporary decorator
-inline std::string decorator_temp(std::string::const_iterator begin, std::string::const_iterator end) {
-    std::string result(begin, end);
-    std::transform(result.begin(), result.end(), result.begin(), [](char c) { return std::tolower(c); });
-    return result;
-}
-
-//this is temporary split algorithm
-inline void split_temp(std::string const & input, std::function<void (std::string::const_iterator&, std::string::const_iterator&)> const & callback) {
-
-    std::string::const_iterator left = input.begin();
-    std::string::const_iterator right = left;
-
-    while (left != input.end() && *left == ' ')
-        ++left;
-
-    right = left;
-    while (right != input.end()) {
-        if (*right == ' ') {
-            callback(left, right);
-            left = right;
-            while (left != input.end() && *left == ' ')
-                ++left;
-            right = left;
-        } else {
-            ++right;
-        }
-    }
-    if (left != right)
-        callback(left, right);
-}
-
 struct IterRangeComp {
     bool operator()(const std::tuple<std::string::const_iterator, std::string::const_iterator>& a,
                     const std::tuple<std::string::const_iterator, std::string::const_iterator>& b) const {
@@ -94,7 +62,7 @@ struct FrequencyAndIndexStruct {
     std::uint32_t const TermFrequency;                            // Words and the number of documents that it appears in
     std::uint32_t const Index;
 
-    //copy needed in generating FrequencyAndIndexMap
+    //When generating the DocumentStatisticsAnnotationData, it will call FrequencyAndIndexStruct copy constructor
     //FEATURIZER_MOVE_CONSTRUCTOR_ONLY(FrequencyAndIndexStruct);
     FrequencyAndIndexStruct(std::uint32_t termFrequency, std::uint32_t index);
     bool operator==(FrequencyAndIndexStruct const &other) const;
@@ -151,9 +119,10 @@ public:
     //       rather than asci characters.
     using InputType                         = std::string;
     using InputTypeConstIterator            = std::string::const_iterator;
-    using StringDecorator                   = std::function<std::string (InputTypeConstIterator begin, InputTypeConstIterator end)>;
+    using StringDecorator                   = std::function<std::string (std::string)>;
     using IndexMap                          = std::unordered_map<std::string, std::uint32_t>;
     using FrequencyMap                      = IndexMap;
+    using RegexT                            = std::regex;
 
     // ----------------------------------------------------------------------
     // |
@@ -162,6 +131,12 @@ public:
     // ----------------------------------------------------------------------
     static constexpr char const * const     NameValue = DocumentStatisticsEstimatorName;
 
+    enum AnalyzerMethod {
+        WORD = 0,
+        CHAR = 1,
+        CHARWB = 2
+    };
+
     // ----------------------------------------------------------------------
     // |
     // |  Public Methods
@@ -169,10 +144,14 @@ public:
     // ----------------------------------------------------------------------
     DocumentStatisticsTrainingOnlyPolicy(
         StringDecorator decorator,
+        AnalyzerMethod analyzer,
+        std::string regexToken,
         nonstd::optional<IndexMap> vocabulary,
         nonstd::optional<std::uint32_t> topKTerms,
         std::float_t minDf,
-        std::float_t maxDf
+        std::float_t maxDf,
+        std::uint32_t ngramRangeMin,
+        std::uint32_t ngramRangeMax
     );
 
     void fit(InputType const &input);
@@ -191,11 +170,15 @@ private:
     // |
     // ----------------------------------------------------------------------
     StringDecorator const                   _stringDecoratorFunc;
+    AnalyzerMethod const                    _analyzer;
+    std::string const                       _regexToken;
 
     nonstd::optional<IndexMap> const        _existingVocabulary;
     nonstd::optional<std::uint32_t> const   _topKTerms;
     std::float_t const                      _minDf;
     std::float_t const                      _maxDf;
+    std::uint32_t const                     _ngramRangeMin;
+    std::uint32_t const                     _ngramRangeMax;
 
     FrequencyMap                            _termFrequency;
     std::uint32_t                           _totalNumDocuments;
@@ -237,6 +220,8 @@ public:
     using BaseType                          = TrainingOnlyEstimatorImpl<Details::DocumentStatisticsTrainingOnlyPolicy, MaxNumTrainingItemsV>;
     using StringDecorator                   = Details::DocumentStatisticsTrainingOnlyPolicy::StringDecorator;
     using IndexMap                          = Details::DocumentStatisticsTrainingOnlyPolicy::IndexMap;
+    using AnalyzerMethod                    = Details::DocumentStatisticsTrainingOnlyPolicy::AnalyzerMethod;
+    using RegexT                            = Details::DocumentStatisticsTrainingOnlyPolicy::RegexT;
     // ----------------------------------------------------------------------
     // |
     // |  Public Methods
@@ -246,10 +231,14 @@ public:
         AnnotationMapsPtr pAllColumnAnnotations,
         size_t colIndex,
         StringDecorator decorator,
+        AnalyzerMethod analyzer,
+        std::string regexToken,
         nonstd::optional<IndexMap> vocabulary,
         nonstd::optional<std::uint32_t> topKTerms,
         std::float_t minDf,
-        std::float_t maxDf
+        std::float_t maxDf,
+        std::uint32_t ngramRangeMin,
+        std::uint32_t ngramRangeMax
     );
     ~DocumentStatisticsEstimator(void) override = default;
 
@@ -319,20 +308,28 @@ DocumentStatisticsEstimator<MaxNumTrainingItemsV>::DocumentStatisticsEstimator(
     AnnotationMapsPtr pAllColumnAnnotations,
     size_t colIndex,
     StringDecorator decorator,
+    AnalyzerMethod analyzer,
+    std::string regexToken,
     nonstd::optional<IndexMap> existingVocabulary,
     nonstd::optional<std::uint32_t> topKTerms,
     std::float_t minDf,
-    std::float_t maxDf
+    std::float_t maxDf,
+    std::uint32_t ngramRangeMin,
+    std::uint32_t ngramRangeMax
 ) :
     BaseType(
         std::move(pAllColumnAnnotations),
         std::move(colIndex),
         true,
         std::move(decorator),
+        std::move(analyzer),
+        std::move(regexToken),
         std::move(existingVocabulary),
         std::move(topKTerms),
         std::move(minDf),
-        std::move(maxDf)
+        std::move(maxDf),
+        std::move(ngramRangeMin),
+        std::move(ngramRangeMax)
     ) {
 }
 
@@ -439,16 +436,11 @@ inline DocumentStatisticsAnnotationData::FrequencyAndIndexMap MergeTwoMapsWithSa
         if (termIndexIter == termIndex.end())
             throw std::invalid_argument("the keys in termFrequency and termIndex do not match");
 
-        FrequencyAndIndexStruct value(std::move(termFrequencyIter.second), std::move(termIndexIter->second));
-        // termFrequencyAndIndex.emplace(
-        //     DocumentStatisticsAnnotationData::FrequencyAndIndexMap::value_type(
-        //         std::move(termFrequencyIter.first),
-        //         std::move(value)
-        //     )
-        // );
-        //FrequencyAndIndexStruct value(termFrequencyIter.second, termIndex.at(termFrequencyIter.first));
-        //termFrequencyAndIndex.emplace(std::make_pair(termFrequencyIter.first, std::move(value)));
-        termFrequencyAndIndex.emplace(std::move(termFrequencyIter.first), std::move(value));
+
+        termFrequencyAndIndex.emplace(std::piecewise_construct,
+                                      std::forward_as_tuple(std::move(termFrequencyIter.first)),
+                                      std::forward_as_tuple(std::move(termFrequencyIter.second), std::move(termIndexIter->second)));
+
     }
     return termFrequencyAndIndex;
 }
@@ -461,17 +453,18 @@ inline DocumentStatisticsAnnotationData::FrequencyAndIndexMap MergeTwoMapsWithSa
 // ----------------------------------------------------------------------
 inline Details::DocumentStatisticsTrainingOnlyPolicy::DocumentStatisticsTrainingOnlyPolicy(
     StringDecorator decorator,
+    AnalyzerMethod analyzer,
+    std::string regexToken,
     nonstd::optional<IndexMap> existingVocabulary,
     nonstd::optional<std::uint32_t> topKTerms,
     std::float_t minDf,
-    std::float_t maxDf
+    std::float_t maxDf,
+    std::uint32_t ngramRangeMin,
+    std::uint32_t ngramRangeMax
 ) :
-    _stringDecoratorFunc(
-        [&decorator](void) -> StringDecorator & {
-            //no need to validate this as !decorator is a choice
-            return decorator;
-        }()
-    ),
+    _stringDecoratorFunc(std::move(decorator)),
+    _analyzer(std::move(analyzer)),
+    _regexToken(std::move(regexToken)),
     _existingVocabulary(
         std::move(
             [&existingVocabulary](void) -> nonstd::optional<IndexMap> & {
@@ -512,9 +505,32 @@ inline Details::DocumentStatisticsTrainingOnlyPolicy::DocumentStatisticsTraining
             }()
         )
     ),
+    _ngramRangeMin(
+        std::move(
+            [&ngramRangeMin](void) -> std::uint32_t & {
+                if(ngramRangeMin == 0)
+                    throw std::invalid_argument("ngramRangeMin");
+
+                return ngramRangeMin;
+            }()
+        )
+    ),
+    _ngramRangeMax(
+        std::move(
+            [&ngramRangeMax](void) -> std::uint32_t & {
+                if(ngramRangeMax == 0)
+                    throw std::invalid_argument("ngramRangeMax");
+
+                return ngramRangeMax;
+            }()
+        )
+    ),
     _totalNumDocuments(0) {
         if (_minDf > _maxDf)
             throw std::invalid_argument("_minDf > _maxDf");
+
+        if (_ngramRangeMin > _ngramRangeMax)
+            throw std::invalid_argument("_ngramRangeMin > _ngramRangeMax");
 }
 
 inline void Details::DocumentStatisticsTrainingOnlyPolicy::fit(InputType const &input) {
@@ -522,7 +538,7 @@ inline void Details::DocumentStatisticsTrainingOnlyPolicy::fit(InputType const &
         fit_impl<std::set<std::string>>(
             input,
             [this](InputTypeConstIterator begin, InputTypeConstIterator end) -> std::string {
-                return _stringDecoratorFunc(begin, end);
+                return _stringDecoratorFunc(std::string(begin, end));
             },
             [](std::string const &value) -> std::string const & { //I add a const here
                 return value;
@@ -562,7 +578,7 @@ inline DocumentStatisticsAnnotationData Details::DocumentStatisticsTrainingOnlyP
     //ignore the additional keys in termIndex
     FrequencyAndIndexMap                    termFrequencyAndIndex(MergeTwoMapsWithSameKeys(std::move(prunedTermFreq), std::move(termIndex)));
 
-    return DocumentStatisticsAnnotationData(std::move(termFrequencyAndIndex), std::move(_totalNumDocuments));
+    return DocumentStatisticsAnnotationData(termFrequencyAndIndex, std::move(_totalNumDocuments));
 }
 
 // ----------------------------------------------------------------------
@@ -572,20 +588,56 @@ template <typename SetT, typename CreateKeyFuncT, typename KeyToStringFuncT>
 void Details::DocumentStatisticsTrainingOnlyPolicy::fit_impl(InputType const &input, CreateKeyFuncT const &createKeyFunc, KeyToStringFuncT const &keyToStringFunc) {
     SetT                                    documents;
 
-    split_temp(
-        input,
-        [&createKeyFunc, &documents](InputTypeConstIterator begin, InputTypeConstIterator end) {
-            documents.insert(createKeyFunc(begin, end));
+    if (_analyzer == AnalyzerMethod::WORD) {
+        if (!_regexToken.empty()) {
+            Microsoft::Featurizer::ParseRegex<InputTypeConstIterator>(
+                input,
+                RegexT(_regexToken),
+                [&createKeyFunc, &documents] (InputTypeConstIterator begin, InputTypeConstIterator end) {
+                    documents.insert(createKeyFunc(begin, end));
+                }
+            );
+        } else if (_ngramRangeMin == 1 && _ngramRangeMax == 1) {
+            Microsoft::Featurizer::Parse<InputTypeConstIterator>(
+                input,
+                [](char c) {return std::isspace(c);},
+                [&createKeyFunc, &documents] (InputTypeConstIterator begin, InputTypeConstIterator end) {
+                    documents.insert(createKeyFunc(begin, end));
+                }
+            );
+        } else {
+            Microsoft::Featurizer::ParseNgramWordCopy<InputTypeConstIterator>(
+                input,
+                [](char c) {return std::isspace(c);},
+                _ngramRangeMin,
+                _ngramRangeMax,
+                [&createKeyFunc, &documents] (InputTypeConstIterator begin, InputTypeConstIterator end) {
+                    documents.insert(createKeyFunc(begin, end));
+                }
+            );
         }
-    );
+    } else if (_analyzer == AnalyzerMethod::CHAR) {
+        Microsoft::Featurizer::ParseNgramCharCopy<InputTypeConstIterator>(
+            input,
+            _ngramRangeMin,
+            _ngramRangeMax,
+            [&createKeyFunc, &documents] (InputTypeConstIterator begin, InputTypeConstIterator end) {
+                documents.insert(createKeyFunc(begin, end));
+            }
+        );
+    } else {
+        assert(_analyzer == AnalyzerMethod::CHARWB);
 
-    // Microsoft::Featurizer::Parse<std::string::const_iterator, char>(
-    //     input,
-    //     ' ',
-    //     [&createKeyFunc, &documents](InputTypeConstIterator begin, InputTypeConstIterator end) {
-    //         documents.insert(createKeyFunc(begin, end));
-    //     }
-    // );
+        Microsoft::Featurizer::ParseNgramCharwbCopy<InputTypeConstIterator>(
+            input,
+            [](char c) {return std::isspace(c);},
+            _ngramRangeMin,
+            _ngramRangeMax,
+            [&createKeyFunc, &documents] (InputTypeConstIterator begin, InputTypeConstIterator end) {
+                documents.insert(createKeyFunc(begin, end));
+            }
+        );
+    }
 
     auto const                              getCountFunc(
         [this, &keyToStringFunc](typename SetT::value_type const &key) -> typename FrequencyMap::mapped_type & {
