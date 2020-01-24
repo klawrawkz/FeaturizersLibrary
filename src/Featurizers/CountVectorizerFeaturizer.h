@@ -5,9 +5,10 @@
 #pragma once
 
 #include "Components/PipelineExecutionEstimatorImpl.h"
-#include "Components/InverseDocumentFrequencyEstimator.h"
+#include "Components/DocumentStatisticsEstimator.h"
 #include "../Traits.h"
 #include "Structs.h"
+#include "../Strings.h"
 
 namespace Microsoft {
 namespace Featurizer {
@@ -15,16 +16,16 @@ namespace Featurizers {
 
 /////////////////////////////////////////////////////////////////////////
 ///  \class         CountVectorizerTransformer
-///  \brief         Returns TFStruct for each unique input
+///  \brief         Returns SparseVectorEncoding<std::uint32_t> for each unique input
 ///
-class CountVectorizerTransformer : public StandardTransformer<std::string, TFStruct> {
+class CountVectorizerTransformer : public StandardTransformer<std::string, SparseVectorEncoding<std::uint32_t>> {
 public:
     // ----------------------------------------------------------------------
     // |
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using BaseType                           = StandardTransformer<std::string, TFStruct>;
+    using BaseType                           = StandardTransformer<std::string, SparseVectorEncoding<std::uint32_t>>;
     using IndexMapType                       = std::unordered_map<std::string, std::uint32_t>;
     using IterRangeType                      = std::tuple<std::string::const_iterator, std::string::const_iterator>;
 
@@ -65,12 +66,13 @@ private:
         ApperanceMapType apperanceMap;
 
         //todo: will use vector<functor> after string header file is done
-        Components::split_temp( 
-            input, 
-            [&apperanceMap] (std::string::const_iterator & iter_start, std::string::const_iterator & iter_end) {
-                
+        Strings::Parse<std::string::const_iterator>(
+            input,
+            [](char c) {return std::isspace(c);},
+            [&apperanceMap] (std::string::const_iterator iter_start, std::string::const_iterator iter_end) {
+
                 ApperanceMapType::iterator iter_apperance(apperanceMap.find(std::make_tuple(iter_start, iter_end)));
-                
+
                 if (iter_apperance != apperanceMap.end()) {
                     ++iter_apperance->second;
                 } else {
@@ -78,6 +80,7 @@ private:
                 }
             }
         );
+        std::vector<SparseVectorEncoding<std::uint32_t>::ValueEncoding> result;
 
         for (auto const & pair : apperanceMap) {
             std::string const word = std::string(std::get<0>(pair.first), std::get<1>(pair.first));
@@ -86,13 +89,19 @@ private:
 
             if (iter_label != Labels.end()) {
                 if (Binary) {
-                    callback(TFStruct(static_cast<std::uint32_t>(iter_label->second), static_cast<std::uint32_t>(1)));
+                    result.emplace_back(SparseVectorEncoding<std::uint32_t>::ValueEncoding(1, iter_label->second));
                 } else {
-                    callback(TFStruct(static_cast<std::uint32_t>(iter_label->second), static_cast<std::uint32_t>(pair.second)));
+                    result.emplace_back(SparseVectorEncoding<std::uint32_t>::ValueEncoding(pair.second, iter_label->second));
                 }
             }
         }
-                                                                                                         
+        std::sort(result.begin(), result.end(),
+            [](SparseVectorEncoding<std::uint32_t>::ValueEncoding const &a, SparseVectorEncoding<std::uint32_t>::ValueEncoding const &b) {
+                return a.Index < b.Index;
+            }
+        );
+        callback(SparseVectorEncoding<std::uint32_t>(Labels.size(), std::move(result)));
+
     }
 };
 
@@ -100,28 +109,29 @@ namespace Details {
 
 /////////////////////////////////////////////////////////////////////////
 ///  \class         CountVectorizerEstimatorImpl
-///  \brief         Estimator that uses the output of the 
-///                 InverseDocumentFrequencyEstimator to provide useful
+///  \brief         Estimator that uses the output of the
+///                 DocumentStatisticsEstimator to provide useful
 ///                 information which helps calculation of CountVectorizer
 template <size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()>
-class CountVectorizerEstimatorImpl : public TransformerEstimator<std::string, TFStruct> {
+class CountVectorizerEstimatorImpl : public TransformerEstimator<std::string, SparseVectorEncoding<std::uint32_t>> {
 public:
     // ----------------------------------------------------------------------
     // |
     // |  Public Types
     // |
     // ----------------------------------------------------------------------
-    using BaseType                          = TransformerEstimator<std::string, TFStruct>;
+    using BaseType                          = TransformerEstimator<std::string, SparseVectorEncoding<std::uint32_t>>;
     using TransformerType                   = CountVectorizerTransformer;
     using IndexMapType                      = CountVectorizerTransformer::IndexMapType;
+    using StringDecorator                   = std::function<std::string (std::string)>;
+    using AnalyzerMethod                    = Components::Details::DocumentStatisticsTrainingOnlyPolicy::AnalyzerMethod;
 
     // ----------------------------------------------------------------------
     // |
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    CountVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, 
-                                 std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary);
+    CountVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, bool binary);
     ~CountVectorizerEstimatorImpl(void) override = default;
 
     FEATURIZER_MOVE_CONSTRUCTOR_ONLY(CountVectorizerEstimatorImpl);
@@ -133,11 +143,7 @@ private:
     // |
     // ----------------------------------------------------------------------
     size_t const                             _colIndex;
-    
-    std::float_t const                       _max_df;
-    std::float_t const                       _min_df;
-    std::uint32_t const                      _max_features;
-    IndexMapType const                       _vocabulary;
+
     bool const                               _binary;
 
     // ----------------------------------------------------------------------
@@ -156,27 +162,20 @@ private:
 
     // MSVC has problems when the declaration and definition are separated
     typename BaseType::TransformerUniquePtr create_transformer_impl(void) override {
-       
-        using InverseDocumentFrequencyEstimator = Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>;
 
-        Components::InverseDocumentFrequencyAnnotationData const &      data(InverseDocumentFrequencyEstimator::get_annotation_data(BaseType::get_column_annotations(), _colIndex, Components::InverseDocumentFrequencyEstimatorName));
+        using DocumentStatisticsEstimator = Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>;
 
-        typename Components::InverseDocumentFrequencyAnnotationData::InverseDocumentFrequency const & 
-                                                            docuApperance(data.TermFrequency);
+        Components::DocumentStatisticsAnnotationData const &      data(DocumentStatisticsEstimator::get_annotation_data(BaseType::get_column_annotations(), _colIndex, Components::DocumentStatisticsEstimatorName));
 
-        std::uint32_t const                                 totalNumDocus(data.TotalNumDocuments);
-                   
+        typename Components::DocumentStatisticsAnnotationData::FrequencyAndIndexMap const &
+                                                            freqAndIndex(data.TermFrequencyAndIndex);
+
+
         typename CountVectorizerTransformer::IndexMapType indexMap;
 
-        if (!_vocabulary.empty()) {
-            return std::make_unique<CountVectorizerTransformer>(_vocabulary, _binary);
-        }
 
-        for (auto const & pair : docuApperance) {
-            std::float_t const freq = pair.second / static_cast<std::float_t>(totalNumDocus);
-
-            if (freq >= _min_df && freq <= _max_df) 
-                indexMap.insert(std::make_pair(pair.first, indexMap.size()));
+        for (auto const & pair : freqAndIndex) {
+            indexMap.insert(std::make_pair(pair.first, pair.second.Index));
         }
 
         return std::make_unique<CountVectorizerTransformer>(indexMap, _binary);
@@ -192,7 +191,7 @@ private:
 template <size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()>
 class CountVectorizerEstimator :
     public Components::PipelineExecutionEstimatorImpl<
-        Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>,
+        Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>,
         Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>
     > {
 public:
@@ -203,17 +202,23 @@ public:
     // ----------------------------------------------------------------------
     using BaseType =
         Components::PipelineExecutionEstimatorImpl<
-            Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>,
+            Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>,
             Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>
         >;
 
     using IndexMapType              = CountVectorizerTransformer::IndexMapType;
+    using StringDecorator                   = std::function<std::string (std::string)>;
+    using AnalyzerMethod                    = Components::Details::DocumentStatisticsTrainingOnlyPolicy::AnalyzerMethod;
     // ----------------------------------------------------------------------
     // |
     // |  Public Methods
     // |
     // ----------------------------------------------------------------------
-    CountVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary);
+    CountVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, StringDecorator decorator,
+                                                                      AnalyzerMethod analyzer, std::string regex, std::float_t max_df,
+                                                                      std::float_t min_df, nonstd::optional<std::uint32_t> top_k_terms,
+                                                                      nonstd::optional<IndexMapType> vocabulary,
+                                                                      std::uint32_t ngram_min, std::uint32_t ngram_max, bool binary);
     ~CountVectorizerEstimator(void) override = default;
 
     FEATURIZER_MOVE_CONSTRUCTOR_ONLY(CountVectorizerEstimator);
@@ -268,21 +273,24 @@ bool CountVectorizerTransformer::operator==(CountVectorizerTransformer const &ot
 // ----------------------------------------------------------------------
 
 template <size_t MaxNumTrainingItemsV>
-CountVectorizerEstimator<MaxNumTrainingItemsV>::CountVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary) :
+CountVectorizerEstimator<MaxNumTrainingItemsV>::CountVectorizerEstimator(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, StringDecorator decorator,
+                                                                                           AnalyzerMethod analyzer, std::string regex, std::float_t max_df,
+                                                                                           std::float_t min_df, nonstd::optional<std::uint32_t> top_k_terms,
+                                                                                           nonstd::optional<IndexMapType> vocabulary,
+                                                                                           std::uint32_t ngram_min, std::uint32_t ngram_max, bool binary) :
     BaseType(
         "CountVectorizerEstimator",
         pAllColumnAnnotations,
-        [pAllColumnAnnotations, colIndex](void) { return Components::InverseDocumentFrequencyEstimator<MaxNumTrainingItemsV>(std::move(pAllColumnAnnotations), std::move(colIndex)); },
-        [pAllColumnAnnotations, colIndex, &max_df, &min_df, &max_features, &vocabulary, &binary](void) { 
+        [pAllColumnAnnotations, colIndex, &decorator, &analyzer, &regex, &vocabulary, &top_k_terms, &min_df, &max_df, &ngram_min, &ngram_max](void) { return Components::DocumentStatisticsEstimator<MaxNumTrainingItemsV>(std::move(pAllColumnAnnotations), std::move(colIndex),
+                                                                                                                                                                                                                           std::move(decorator), std::move(analyzer), std::move(regex),
+                                                                                                                                                                                                                           std::move(vocabulary), std::move(top_k_terms), std::move(min_df),
+                                                                                                                                                                                                                           std::move(max_df), std::move(ngram_min), std::move(ngram_max)); },
+        [pAllColumnAnnotations, colIndex, &binary](void) {
             return Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>(
-                std::move(pAllColumnAnnotations), 
-                std::move(colIndex), 
-                std::move(max_df), 
-                std::move(min_df), 
-                std::move(max_features), 
-                std::move(vocabulary),
+                std::move(pAllColumnAnnotations),
+                std::move(colIndex),
                 std::move(binary)
-            ); 
+            );
         }
     ) {
 }
@@ -293,7 +301,7 @@ CountVectorizerEstimator<MaxNumTrainingItemsV>::CountVectorizerEstimator(Annotat
 // |
 // ----------------------------------------------------------------------
 template <size_t MaxNumTrainingItemsV>
-Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>::CountVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, std::float_t max_df, std::float_t min_df, std::uint32_t max_features, IndexMapType vocabulary, bool binary) :
+Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>::CountVectorizerEstimatorImpl(AnnotationMapsPtr pAllColumnAnnotations, size_t colIndex, bool binary) :
     BaseType("CountVectorizerEstimatorImpl", std::move(pAllColumnAnnotations)),
     _colIndex(
         std::move(
@@ -305,28 +313,6 @@ Details::CountVectorizerEstimatorImpl<MaxNumTrainingItemsV>::CountVectorizerEsti
             }()
         )
     ),
-    _max_df(
-        std::move(
-            [&max_df](void) -> std::float_t & {
-                if(max_df > 1.0f || max_df < 0.0f)
-                    throw std::invalid_argument("max_df");
-
-                return max_df;
-            }()
-        )
-    ),
-    _min_df(
-        std::move(
-            [&min_df](void) -> std::float_t & {
-                if(min_df > 1.0f || min_df < 0.0f)
-                    throw std::invalid_argument("min_df");
-
-                return min_df;
-            }()
-        )
-    ),
-    _max_features(std::move(max_features)),
-    _vocabulary(std::move(vocabulary)),
     _binary(std::move(binary)) {
 }
 
