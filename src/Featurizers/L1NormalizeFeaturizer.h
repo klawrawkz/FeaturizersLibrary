@@ -15,12 +15,12 @@ namespace Featurizers {
 ///  \brief         Normalize a vector so that its l1 norm is 1
 ///
 template <
-    typename IteratorRangeT,
+    typename InputData,
     size_t MaxNumTrainingItemsV=std::numeric_limits<size_t>::max()
 >
 using L1NormalizeEstimator = Base::NormalizeEstimatorBase<
-                                    IteratorRangeT,
-                                    Components::Updaters::L1NormUpdater<typename std::iterator_traits<typename std::tuple_element<0, IteratorRangeT>::type>::value_type>,
+                                    InputData,
+                                    Components::Updaters::L1NormUpdater<typename InputData::value_type>,
                                     MaxNumTrainingItemsV>;
 
 
