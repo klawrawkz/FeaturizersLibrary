@@ -7,8 +7,8 @@
 #include "Components/PipelineExecutionEstimatorImpl.h"
 #include "Components/DocumentStatisticsEstimator.h"
 #include "../Traits.h"
-#include "Structs.h"
 #include "../Strings.h"
+#include "Structs.h"
 
 namespace Microsoft {
 namespace Featurizer {
@@ -61,29 +61,28 @@ private:
     // MSVC has problems when the definition and declaration are separated
     void execute_impl(typename BaseType::InputType const &input, typename BaseType::CallbackFunction const &callback) override {
 
-        using ApperanceMapType = typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>;
+        using AppearanceMapType = typename std::map<IterRangeType, std::uint32_t, Components::IterRangeComp>;
 
-        ApperanceMapType apperanceMap;
+        AppearanceMapType appearanceMap;
 
-        //todo: will use vector<functor> after string header file is done
         Strings::Parse<std::string::const_iterator>(
             input,
             [](char c) {return std::isspace(c);},
-            [&apperanceMap] (std::string::const_iterator iter_start, std::string::const_iterator iter_end) {
+            [&appearanceMap] (std::string::const_iterator iter_start, std::string::const_iterator iter_end) {
 
-                ApperanceMapType::iterator iter_apperance(apperanceMap.find(std::make_tuple(iter_start, iter_end)));
+                AppearanceMapType::iterator iter_apperance(appearanceMap.find(std::make_tuple(iter_start, iter_end)));
 
-                if (iter_apperance != apperanceMap.end()) {
+                if (iter_apperance != appearanceMap.end()) {
                     ++iter_apperance->second;
                 } else {
-                    apperanceMap.insert(std::make_pair(std::make_tuple(iter_start, iter_end), 1));
+                    appearanceMap.insert(std::make_pair(std::make_tuple(iter_start, iter_end), 1));
                 }
             }
         );
         std::vector<SparseVectorEncoding<std::uint32_t>::ValueEncoding> result;
 
-        for (auto const & pair : apperanceMap) {
-            std::string const word = std::string(std::get<0>(pair.first), std::get<1>(pair.first));
+        for (auto const & wordAppearance : appearanceMap) {
+            std::string const word = std::string(std::get<0>(wordAppearance.first), std::get<1>(wordAppearance.first));
 
             typename IndexMapType::const_iterator const      iter_label(Labels.find(word));
 
@@ -91,7 +90,7 @@ private:
                 if (Binary) {
                     result.emplace_back(SparseVectorEncoding<std::uint32_t>::ValueEncoding(1, iter_label->second));
                 } else {
-                    result.emplace_back(SparseVectorEncoding<std::uint32_t>::ValueEncoding(pair.second, iter_label->second));
+                    result.emplace_back(SparseVectorEncoding<std::uint32_t>::ValueEncoding(wordAppearance.second, iter_label->second));
                 }
             }
         }
@@ -174,8 +173,8 @@ private:
         typename CountVectorizerTransformer::IndexMapType indexMap;
 
 
-        for (auto const & pair : freqAndIndex) {
-            indexMap.insert(std::make_pair(pair.first, pair.second.Index));
+        for (auto const & termFrequencyAndIndexPair : freqAndIndex) {
+            indexMap.insert(std::make_pair(termFrequencyAndIndexPair.first, termFrequencyAndIndexPair.second.Index));
         }
 
         return std::make_unique<CountVectorizerTransformer>(indexMap, _binary);
@@ -252,12 +251,12 @@ CountVectorizerTransformer::CountVectorizerTransformer(IndexMapType map, bool bi
 }
 
 CountVectorizerTransformer::CountVectorizerTransformer(Archive &ar) :
-    // TODO: Labels(Traits<decltype(Labels)>::deserialize(ar)),
+    Labels(Traits<decltype(Labels)>::deserialize(ar)),
     Binary(Traits<decltype(Binary)>::deserialize(ar)) {
 }
 
 void CountVectorizerTransformer::save(Archive &ar) const /*override*/ {
-    // TODO: Traits<decltype(Labels)>::serialize(ar, Labels);
+    Traits<decltype(Labels)>::serialize(ar, Labels);
     Traits<decltype(Binary)>::serialize(ar, Binary);
 }
 
