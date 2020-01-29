@@ -303,61 +303,13 @@ CountVectorizerTransformer::CountVectorizerTransformer(IndexMapType map, bool bi
                 return ngram_max;
             }()
         )),
-    _parse_func([this](void) -> ParseFunctionType {
-            //initialize parse function
+    _parse_func(
+        [this](void) -> ParseFunctionType {
             ParseFunctionType parseFunc;
-            if (_analyzer == AnalyzerMethod::Word) {
-                if (!_regex.empty()) {
-                    parseFunc = [this] (std::string const & input, std::function<void (StringIterator, StringIterator)> const &callback) {
-                        Microsoft::Featurizer::Strings::ParseRegex<std::string::const_iterator, std::regex>(
-                            input,
-                            std::regex(_regex),
-                            callback
-                        );
-                    };
-                } else if (_ngram_min == 1 && _ngram_max == 1) {
-                    parseFunc = [] (std::string const & input, std::function<void (StringIterator, StringIterator)> const &callback) {
-                        Microsoft::Featurizer::Strings::Parse<std::string::const_iterator, std::function<bool (char)>>(
-                            input,
-                            [] (char c) {return std::isspace(c);},
-                            callback
-                        );
-                    };
-                } else {
-                    parseFunc = [this] (std::string const & input, std::function<void (StringIterator, StringIterator)> const &callback) {
-                        Microsoft::Featurizer::Strings::ParseNgramWord<std::string::const_iterator, std::function<bool (char)>>(
-                            input,
-                            [] (char c) {return std::isspace(c);},
-                            _ngram_min,
-                            _ngram_max,
-                            callback
-                        );
-                    };
-                }
-            } else if (_analyzer == AnalyzerMethod::Char) {
-                parseFunc = [this] (std::string const & input, std::function<void (StringIterator, StringIterator)> const &callback) {
-                    Microsoft::Featurizer::Strings::ParseNgramChar<std::string::const_iterator>(
-                        input,
-                        _ngram_min,
-                        _ngram_max,
-                        callback
-                    );
-                };
-            } else {
-                assert(_analyzer == AnalyzerMethod::Charwb);
-
-                parseFunc = [this] (std::string const & input, std::function<void (StringIterator, StringIterator)> const &callback) {
-                    Microsoft::Featurizer::Strings::ParseNgramCharwb<std::string::const_iterator, std::function<bool (char)>>(
-                        input,
-                        [] (char c) {return std::isspace(c);},
-                        _ngram_min,
-                        _ngram_max,
-                        callback
-                    );
-                };
-            }
+            GenerateParseFunc(parseFunc, _analyzer, _regex, _ngram_min, _ngram_max);
             return parseFunc;
-        }()) {
+        }()
+    ) {
 }
 
 CountVectorizerTransformer::CountVectorizerTransformer(Archive &ar) :
