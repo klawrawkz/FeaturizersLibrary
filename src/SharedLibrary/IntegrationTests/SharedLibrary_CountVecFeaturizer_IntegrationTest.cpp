@@ -21,7 +21,7 @@ TEST_CASE("Standard") {
                                          && obj.Values[2].Value == 1 && obj.Values[2].Index == 2);
         },
         true,
-        CountVectorizerFeaturizer_AnalyzerMethod_Word,
+        static_cast<std::uint8_t>(CountVectorizerFeaturizer_AnalyzerMethod_Word),
         "",
         1.0f,
         0.0f,
