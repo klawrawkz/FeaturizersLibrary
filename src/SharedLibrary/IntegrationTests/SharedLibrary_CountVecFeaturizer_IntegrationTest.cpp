@@ -8,7 +8,7 @@
 #include "GeneratedCode/SharedLibraryTests_CountVectorizerFeaturizer.h"
 
 TEST_CASE("Standard") {
-    uint32_t ngram_max(3);
+    std::uint32_t topK(3);
     CountVectorizerFeaturizer_Test(
         std::vector<std::string>{"oraNge apple oranGE grape", "grApe caRrOt carrot apple", "peach Banana orange banana"},
         std::vector<std::string>{"banana grape grape apple apple apple orange"},
@@ -25,7 +25,7 @@ TEST_CASE("Standard") {
         "",
         1.0f,
         0.0f,
-        &ngram_max,
+        &topK,
         static_cast<std::uint32_t>(1),
         static_cast<std::uint32_t>(1),
         false
