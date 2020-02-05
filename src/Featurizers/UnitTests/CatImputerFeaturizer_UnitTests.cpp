@@ -2,6 +2,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License
 // ----------------------------------------------------------------------
+#define CATCH_CONFIG_ENABLE_BENCHMARKING
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -144,7 +145,7 @@ TEST_CASE("Serialization/Deserialization- Numeric") {
     NS::Archive archive;
     model->save(archive);
     std::vector<unsigned char> vec = archive.commit();
-    
+
     NS::Archive loader(vec);
     transformerType modelLoaded(loader);
     CHECK(modelLoaded.Value == model->Value);
@@ -178,4 +179,10 @@ TEST_CASE("Serialization Version Error") {
         NS::Featurizers::CatImputerTransformer<std::string>(in),
         Catch::Contains("Unsupported archive version")
     );
+}
+
+TEST_CASE("Benchmark", "[benchmark]") {
+    BENCHMARK("Standard") {
+        NumericTestWrapper<std::float_t>();
+    };
 }

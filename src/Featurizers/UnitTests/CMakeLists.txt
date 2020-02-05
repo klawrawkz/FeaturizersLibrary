@@ -65,5 +65,13 @@ foreach(_test_name IN ITEMS
         FeaturizersCode
     )
 
-    add_test(NAME ${_test_name} COMMAND ${_test_name} --success)
+    # Run all tests with verbose output except those tagged with "[benchmark]"
+    add_test(NAME ${_test_name} COMMAND ${_test_name} ~[benchmark] --success)
+
+    # If not in release mode, run tests tagged with "[benchmark]". Note that we
+    # don't want to run with verbose output in this scenario, as that output will
+    # prevent accurate benchmark statistics.
+    if(NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        add_test(NAME ${_test_name}_benchmark COMMAND ${_test_name} [benchmark])
+    endif()
 endforeach()
