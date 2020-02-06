@@ -31,6 +31,16 @@ steps:
         SourceFolder: "$(Pipeline.Workspace)/${{ artifact }}"
         TargetFolder: "$(Pipeline.Workspace)/upload/$(pipeline_product_version)/${{ artifact }}"
 
+  - ${{ each artifact in parameters.artifacts }}:
+    - task: CopyFiles@2
+      displayName: "Copy ${{ artifact }}"
+
+      timeoutInMinutes: 180
+
+      inputs:
+        SourceFolder: "$(Pipeline.Workspace)/${{ artifact }}"
+        TargetFolder: "$(Pipeline.Workspace)/upload/Test_Latest_build_$(pipeline_product_version)/${{ artifact }}"
+
   - task: AzureFileCopy@2
     displayName: "Azure Upload"
 
@@ -42,3 +52,18 @@ steps:
       Destination: AzureBlob
       storage: '${{ parameters.storage_account }}'
       ContainerName: '${{ parameters.container }}'
+
+  # - task: AzurePowerShell@4
+  #   displayName: "Azure operations"
+
+  #   timeoutInMinutes: 180
+
+  #   inputs:
+  #     azureSubscription: my-arm-service-connection
+  #     scriptType: filePath
+  #     scriptPath: $(Build.SourcesDirectory)\myscript.ps1
+  #     scriptArguments:
+  #       -Arg1 val1 `
+  #       -Arg2 val2 `
+  #       -Arg3 val3
+  #     azurePowerShellVersion: latestVersion
