@@ -36,7 +36,7 @@ steps:
       command: push
       nuGetFeedType: external
       packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
-      publishFeedCredentials: ${{ parameters.public_service_connection }}
+      publishFeedCredentials: "${{ parameters.public_service_connection }}"
 
       verbosityPush: Detailed # BugBug
 
@@ -50,4 +50,4 @@ steps:
   # BugBug     command: push
   # BugBug     nuGetFeedType: external
   # BugBug     packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
-  # BugBug     publishFeedCredentials: ${{ parameters.release_service_connection }}
+  # BugBug     publishFeedCredentials: "${{ parameters.release_service_connection }}"
