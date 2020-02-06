@@ -5,8 +5,11 @@ parameters:
   azure_dev_ops_build_definition_id: "" # 717 (The definition ID of the build pipeline)
   azure_dev_ops_project_id: "" # 7b4fddf7-fb53-4b12-bfcb-f87ad3774a32 (The project GUID from which to download the pipeline artifacts)
 
-  azure_dev_ops_artifacts_feed_name: "" # Name of Azure DevOps Artifacts feed used to store internal builds
-  service_connection: "" # Service connection name setup in Azure DevOps
+  azure_dev_ops_artifacts_internal_feed_name: "" # Name of Azure DevOps Artifacts feed used to store internal builds
+  azure_dev_ops_artifacts_public_feed_name: "" # Name of Azure DevOps Artifacts feed used to store public internal builds
+
+  public_service_connection: "" # Service connection name setup in Azure DevOps
+  release_service_connection: "" # Service connection name setup in Azure DevOps
 
 steps:
   - template: Publish.initialize_steps_template.yaml
@@ -14,25 +17,33 @@ steps:
       azure_dev_ops_build_definition_id: ${{ parameters.azure_dev_ops_build_definition_id }}
       azure_dev_ops_project_id: ${{ parameters.azure_dev_ops_project_id }}
 
+  # BugBug - task: NuGetCommand@2
+  # BugBug   displayName: "Push to Internal Store"
+  # BugBug
+  # BugBug   timeoutInMinutes: 180
+  # BugBug
+  # BugBug   inputs:
+  # BugBug     command: push
+  # BugBug     publishVstsFeed: '${{ parameters.azure_dev_ops_artifacts_internal_feed_name }}'
+  # BugBug     allowPackageConflicts: true
+  # BugBug     packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
+
   - task: NuGetCommand@2
-    displayName: "Push to Internal Store"
-
-    timeoutInMinutes: 180
-
-    inputs:
-      command: push
-      publishVstsFeed: '${{ parameters.azure_dev_ops_artifacts_feed_name }}'
-      allowPackageConflicts: true
-      packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
-
-  - task: NuGetCommand@2
-    displayName: "Push to External Store"
-
-    condition: or(eq(variables['pipeline_is_release_build'], 1), eq(variables['pipeline_is_prerelease_build'], 1))
-    timeoutInMinutes: 180
-
+    displayName: 'Push to Public Store'
     inputs:
       command: push
       nuGetFeedType: external
-      packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
-      publishFeedCredentials: ${{ parameters.service_connection }}
+      packagesToPush: '"$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg'
+      publishFeedCredentials: ${{ parameters.public_service_connection }}
+
+  # BugBug - task: NuGetCommand@2
+  # BugBug   displayName: "Push to External Store"
+  # BugBug
+  # BugBug   condition: or(eq(variables['pipeline_is_release_build'], 1), eq(variables['pipeline_is_prerelease_build'], 1))
+  # BugBug   timeoutInMinutes: 180
+  # BugBug
+  # BugBug   inputs:
+  # BugBug     command: push
+  # BugBug     nuGetFeedType: external
+  # BugBug     packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
+  # BugBug     publishFeedCredentials: ${{ parameters.release_service_connection }}

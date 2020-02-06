@@ -47,8 +47,10 @@ stages:
               parameters:
                 azure_dev_ops_build_definition_id: 758
                 azure_dev_ops_project_id: "7b4fddf7-fb53-4b12-bfcb-f87ad3774a32"
-                azure_dev_ops_artifacts_feed_name: "DataPipelines"
-                service_connection: "NuGet"
+                azure_dev_ops_artifacts_internal_feed_name: "DataPipelines"
+
+                public_sevice_connection: "NuGet (Public CI Builds)"
+                release_service_connection: "NuGet"
 
   - stage: Epilogue_Stage
     displayName: "Epilogue:"

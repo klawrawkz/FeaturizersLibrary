@@ -12,7 +12,7 @@ that follows.
 `<major>`, `<minor>`, and `<patch>` build values are defined in cmake files and should be updated there;
 for an example, see src/SharedLibrary/cmake/Featurizers.cmake.
 
-`<prerelease_build_name>` and `<build_info>` are defined when invoking the CI build. Additional information
+`<prerelease_build_name>` is (optionally) defined when invoking the CI build. Additional information
 (including steps to specify these values) follows.
 
 Build Types
@@ -29,9 +29,10 @@ Continuous Integration / Standard Build
 The build type invoked by default (when no Azure DevOps variables are specified).
 
     Azure DevOps Variables:                 None
-    Version:                                <major>.<minor>.<patch>-cibuild.<year>.<month>.<day>.<hour>.<minute>.<second>.<debug|release>
-    Example:                                0.2.0-cibuild.2019.10.23.8.47.19.release
-    NuGet Store:                            https://aiinfra.visualstudio.com/DataPipelines/_packaging
+    Version:                                <major>.<minor>.<patch>-pipe.1.<year>.<month>.<day>.<hour>.<minute>.<second>
+    Example:                                0.2.0-pipe.1.2019.10.23.8.47.19
+    NuGet Store (internal):                 https://aiinfra.visualstudio.com/DataPipelines/_packaging
+    NuGet Store (public):                   https://aiinfra.visualstudio.com/PublicPackages/_packaging?_a=feed&feed=FeaturizersLibrary
 
 Prerelease
 ----------
@@ -39,7 +40,7 @@ An unofficial, but public, release.
 
     Azure DevOps Variables:                             prerelease_build_name=<build_name>
     Version:                                            <major>.<minor>.<patch>-<build_name>
-    Example (where prerelease_build_name=preview001):   0.2.0-preview001
+    Example (where prerelease_build_name=preview.1):    0.2.0-preview.1
     NuGet Store:                                        https://www.nuget.org/
 
 Release
@@ -89,7 +90,9 @@ Used to push NuGet packages.
 
     Type:                                               NuGet Service Connection
     Feed URL:                                           https://api.nuget.org/v3/index.json
-    ApiKey:                                             Created on NuGet.org and then copied to the Azure DevOps connection dialog window for one-tiem usage
+    ApiKey:                                             Created on NuGet.org and then copied to the Azure DevOps connection dialog window for one-time usage
+
+BugBug: Public NuGet
 
 featurizerslibrarybuild
 -----------------------
