@@ -27,6 +27,22 @@ steps:
   # BugBug     allowPackageConflicts: true
   # BugBug     packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
 
+  - task: PythonScript@0
+    displayName: "BugBug"
+
+    timeoutInMinutes: 180
+
+    inputs:
+      scriptSource: inline
+      script: |-
+        import os
+        import textwrap
+
+        print("$(Pipeline.Workspace)\n\n")
+        for root, dirs, filenames in os.walk("$(Pipeline.Workspace)"):
+          for filename in filenames:
+            print(os.path.join(root, filename))
+
   - task: NuGetCommand@2
     displayName: 'Push to Public Store'
 
