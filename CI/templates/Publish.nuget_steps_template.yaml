@@ -38,6 +38,8 @@ steps:
       packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
       publishFeedCredentials: ${{ parameters.public_service_connection }}
 
+      verbosityPush: Detailed # BugBug
+
   # BugBug - task: NuGetCommand@2
   # BugBug   displayName: "Push to External Store"
   # BugBug
