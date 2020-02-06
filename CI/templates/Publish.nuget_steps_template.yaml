@@ -38,8 +38,8 @@ steps:
         import os
         import textwrap
 
-        print("$(Pipeline.Workspace)\n\n")
-        for root, dirs, filenames in os.walk("$(Pipeline.Workspace)"):
+        print(r"$(Pipeline.Workspace)\n\n")
+        for root, dirs, filenames in os.walk(r"$(Pipeline.Workspace)"):
           for filename in filenames:
             print(os.path.join(root, filename))
 
