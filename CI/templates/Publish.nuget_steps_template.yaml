@@ -6,7 +6,6 @@ parameters:
   azure_dev_ops_project_id: "" # 7b4fddf7-fb53-4b12-bfcb-f87ad3774a32 (The project GUID from which to download the pipeline artifacts)
 
   azure_dev_ops_artifacts_internal_feed_name: "" # Name of Azure DevOps Artifacts feed used to store internal builds
-  azure_dev_ops_artifacts_public_feed_name: "" # Name of Azure DevOps Artifacts feed used to store public internal builds
 
   public_service_connection: "" # Service connection name setup in Azure DevOps
   release_service_connection: "" # Service connection name setup in Azure DevOps
@@ -30,10 +29,13 @@ steps:
 
   - task: NuGetCommand@2
     displayName: 'Push to Public Store'
+
+    timeoutInMinutes: 180
+
     inputs:
       command: push
       nuGetFeedType: external
-      packagesToPush: '"$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg'
+      packagesToPush: "$(Pipeline.Workspace)/Packages/Packages/Release/*.nupkg;!$(Pipeline.Workspace)/Packages/Packages/Release/*.symbols.nupkg"
       publishFeedCredentials: ${{ parameters.public_service_connection }}
 
   # BugBug - task: NuGetCommand@2

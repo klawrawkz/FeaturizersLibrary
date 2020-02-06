@@ -86,13 +86,19 @@ Used to sign binaries and packages.
 
 Nuget
 -----
-Used to push NuGet packages.
+Used to push release and prerelease NuGet packages.
 
     Type:                                               NuGet Service Connection
     Feed URL:                                           https://api.nuget.org/v3/index.json
     ApiKey:                                             Created on NuGet.org and then copied to the Azure DevOps connection dialog window for one-time usage
 
-BugBug: Public NuGet
+Nuget (Public CI Builds)
+------------------------
+Used to push CI, release, and prerelease NuGet packages.
+
+    Type:                                   NuGet Service Connection
+    Feed Url:                               https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/FeaturizersLibrary/nuget/v3/index.json
+    ApiKey:                                 not_used (Note that this will not be used as the repository is in the same Azure DevOps project, but needs to have some value to continue in the UX)
 
 featurizerslibrarybuild
 -----------------------

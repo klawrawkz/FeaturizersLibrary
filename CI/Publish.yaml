@@ -15,23 +15,23 @@ stages:
     displayName: "Publish:"
 
     jobs:
-      - template: "templates/_job_template.yaml"
-        parameters:
-          # This job needs to be run on the Azure DevOps agents
-          agent_pool: windows-2019
-          job_name: AuzreUpload_Job
-          job_display_name: "Azure Upload"
-          operating_system: Windows
-          custom_checkout:
-            - checkout: none
-          steps:
-            - template: "Publish.azureupload_steps_template.yaml"
-              parameters:
-                azure_dev_ops_build_definition_id: 758
-                azure_dev_ops_project_id: "7b4fddf7-fb53-4b12-bfcb-f87ad3774a32"
-                subscription_id: "AI Infra Build (00c06639-6ee4-454e-8058-8d8b1703bd87)"
-                storage_account: "featurizerslibrarybuild"
-                container: "Archive"
+      # BugBug - template: "templates/_job_template.yaml"
+      # BugBug   parameters:
+      # BugBug     # This job needs to be run on the Azure DevOps agents
+      # BugBug     agent_pool: windows-2019
+      # BugBug     job_name: AuzreUpload_Job
+      # BugBug     job_display_name: "Azure Upload"
+      # BugBug     operating_system: Windows
+      # BugBug     custom_checkout:
+      # BugBug       - checkout: none
+      # BugBug     steps:
+      # BugBug       - template: "Publish.azureupload_steps_template.yaml"
+      # BugBug         parameters:
+      # BugBug           azure_dev_ops_build_definition_id: 758
+      # BugBug           azure_dev_ops_project_id: "7b4fddf7-fb53-4b12-bfcb-f87ad3774a32"
+      # BugBug           subscription_id: "AI Infra Build (00c06639-6ee4-454e-8058-8d8b1703bd87)"
+      # BugBug           storage_account: "featurizerslibrarybuild"
+      # BugBug           container: "Archive"
 
       - template: "templates/_job_template.yaml"
         parameters:
